@@ -1,6 +1,9 @@
 {
     "editor.formatOnSave": true,
     "cSpell.words": [
-        "mockrng"
+        "mockrng",
+        "Peekable",
+        "subexpression",
+        "subexpressions"
     ]
 }

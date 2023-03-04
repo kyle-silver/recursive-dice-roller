@@ -1,9 +1,11 @@
 use rand::Rng;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-enum Exp {
+pub enum Exp {
     Literal(i32),
     Roll(Box<Roll>),
+    Add(Vec<Exp>),
+    Sub(Vec<Exp>),
 }
 
 impl Exp {
@@ -11,18 +13,32 @@ impl Exp {
         match self {
             Exp::Literal(value) => Value::Literal(*value),
             Exp::Roll(roll) => Value::Rolled(roll.val(rng)),
+            Exp::Add(subexpressions) => {
+                let values = subexpressions
+                    .iter()
+                    .map(|subexpression| subexpression.val(rng))
+                    .collect();
+                Value::Add(values)
+            }
+            Exp::Sub(subexpressions) => {
+                let values = subexpressions
+                    .iter()
+                    .map(|subexpression| subexpression.val(rng))
+                    .collect();
+                Value::Sub(values)
+            }
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-enum KeepRule {
+pub enum KeepRule {
     Lowest,
     Highest,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct Keep {
+pub struct Keep {
     retain: Exp,
     rule: KeepRule,
 }
@@ -57,7 +73,7 @@ impl Keep {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct Roll {
+pub struct Roll {
     dice: Exp,
     sides: Exp,
     keep: Keep,
@@ -110,7 +126,7 @@ impl Roll {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct Rolled {
+pub struct Rolled {
     dice: Box<Value>,
     sides: Box<Value>,
     kept: Box<Kept>,
@@ -123,7 +139,7 @@ impl Rolled {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct Kept {
+pub struct Kept {
     rule: KeepRule,
     retained: Value,
     lowest: Vec<i32>,
@@ -141,9 +157,11 @@ impl Kept {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-enum Value {
+pub enum Value {
     Literal(i32),
     Rolled(Rolled),
+    Add(Vec<Value>),
+    Sub(Vec<Value>),
 }
 
 impl Value {
@@ -151,6 +169,18 @@ impl Value {
         match self {
             Value::Literal(val) => *val,
             Value::Rolled(rolled) => rolled.val(),
+            Value::Add(values) => values.iter().map(Value::val).sum(),
+            Value::Sub(values) => {
+                let mut values = values.iter();
+                let mut acc = values
+                    .next()
+                    .expect("values is guaranteed to have at least one element")
+                    .val();
+                while let Some(value) = values.next() {
+                    acc -= value.val();
+                }
+                return acc;
+            }
         }
     }
 }
@@ -190,7 +220,7 @@ mod tests {
                 $(
                     temp_vec.push($x);
                 )*
-                MockRng(temp_vec.into_iter().cycle())
+                MockRng(temp_vec.into_iter())
             }
         };
     }
@@ -265,5 +295,11 @@ mod tests {
             }),
         });
         assert_eq!(expected, expression.val(&mut rng))
+    }
+
+    #[test]
+    fn one_plus_one() {
+        let exp = Exp::Add(vec![Exp::Literal(1), Exp::Literal(1)]);
+        assert_eq!(2, exp.val(&mut mock_rng![]).val())
     }
 }
