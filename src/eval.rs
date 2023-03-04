@@ -58,8 +58,8 @@ impl Keep {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct Roll {
-    sides: Exp,
     dice: Exp,
+    sides: Exp,
     keep: Keep,
 }
 
@@ -111,8 +111,8 @@ impl Roll {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct Rolled {
-    sides: Box<Value>,
     dice: Box<Value>,
+    sides: Box<Value>,
     kept: Box<Kept>,
 }
 
@@ -205,8 +205,8 @@ mod tests {
     fn dice_roll_const_params() {
         let mut rng = mock_rng![3];
         let roll = Roll {
-            sides: Exp::Literal(6),
             dice: Exp::Literal(1),
+            sides: Exp::Literal(6),
             keep: Keep {
                 rule: KeepRule::Highest,
                 retain: Exp::Literal(1),
@@ -214,13 +214,54 @@ mod tests {
         };
         let expression = Exp::Roll(Box::new(roll));
         let expected = Value::Rolled(Rolled {
-            sides: Box::new(Value::Literal(6)),
             dice: Box::new(Value::Literal(1)),
+            sides: Box::new(Value::Literal(6)),
             kept: Box::new(Kept {
                 rule: KeepRule::Highest,
                 retained: Value::Literal(1),
                 lowest: vec![],
                 highest: vec![3],
+            }),
+        });
+        assert_eq!(expected, expression.val(&mut rng))
+    }
+
+    #[test]
+    fn dice_roll_variable_sides() {
+        let mut rng = mock_rng![2, 3, 4];
+        let roll = Roll {
+            dice: Exp::Roll(Box::new(Roll {
+                dice: Exp::Literal(1),
+                sides: Exp::Literal(6),
+                keep: Keep {
+                    retain: Exp::Literal(1),
+                    rule: KeepRule::Highest,
+                },
+            })),
+            sides: Exp::Literal(6),
+            keep: Keep {
+                rule: KeepRule::Highest,
+                retain: Exp::Literal(2),
+            },
+        };
+        let expression = Exp::Roll(Box::new(roll));
+        let expected = Value::Rolled(Rolled {
+            dice: Box::new(Value::Rolled(Rolled {
+                dice: Box::new(Value::Literal(1)),
+                sides: Box::new(Value::Literal(6)),
+                kept: Box::new(Kept {
+                    rule: KeepRule::Highest,
+                    retained: Value::Literal(1),
+                    lowest: vec![],
+                    highest: vec![2],
+                }),
+            })),
+            sides: Box::new(Value::Literal(6)),
+            kept: Box::new(Kept {
+                rule: KeepRule::Highest,
+                retained: Value::Literal(2),
+                lowest: vec![],
+                highest: vec![3, 4],
             }),
         });
         assert_eq!(expected, expression.val(&mut rng))
