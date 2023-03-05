@@ -1,7 +1,7 @@
 use crate::eval::{vec_deque, Exp};
-use std::{collections::VecDeque, iter::Peekable};
+use std::{cell::RefCell, collections::VecDeque, iter::Peekable, rc::Rc};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 enum Token {
     Number(i32),
     Plus,
@@ -85,32 +85,18 @@ impl ExpBuilder {
         use Exp::*;
         use Token::*;
         let Self { tokens, .. } = self;
-        let split_index = tokens.len() - n;
-        match &tokens[split_index..] {
-            [Number(_)] => match tokens.pop() {
-                Some(Number(n)) => return Some(Exp::Literal(n)),
-                _ => unreachable!("Pattern should be guaranteed"),
-            },
-            [Expression(_), Plus, Expression(Add(_))] => {
-                let drained: [Token; 3] = tokens.split_off(split_index).try_into().unwrap();
-                match drained {
-                    [Expression(exp), _, Expression(Add(mut vec))] => {
-                        vec.push_front(exp);
-                        let expression = Exp::Add(vec);
-                        return Some(expression);
-                    }
-                    _ => unreachable!("Pattern should be guaranteed"),
-                }
+        let split = tokens.len() - n;
+        match &mut tokens[split..] {
+            [Number(n)] => return Some(Exp::Literal(*n)),
+            [Expression(augend), Plus, Expression(Add(addends))] => {
+                let arguments = addends.clone();
+                arguments.borrow_mut().push_front(augend.clone());
+                let expression = Exp::Add(arguments);
+                return Some(expression);
             }
-            [Expression(_), Plus, Expression(_)] => {
-                let drained: [Token; 3] = tokens.split_off(split_index).try_into().unwrap();
-                match drained {
-                    [Expression(a), _, Expression(b)] => {
-                        let expression = Exp::Add(vec_deque![a, b]);
-                        return Some(expression);
-                    }
-                    _ => unreachable!("Pattern should be guaranteed"),
-                }
+            [Expression(a), Plus, Expression(b)] => {
+                let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
+                return Some(expression);
             }
             _ => None,
         }
@@ -119,6 +105,7 @@ impl ExpBuilder {
     fn reduce(&mut self) -> bool {
         for window in 1..=self.tokens.len() {
             if let Some(exp) = self.reduced(window) {
+                self.tokens.drain((self.tokens.len() - window)..);
                 self.tokens.push(Token::Expression(exp));
                 return true;
             }
@@ -161,7 +148,7 @@ mod tests {
 
     use super::parse;
     use crate::eval::{vec_deque, Exp};
-    use std::collections::VecDeque;
+    use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
     #[test]
     fn numeric_literal() -> Result<(), String> {
@@ -181,7 +168,10 @@ mod tests {
     fn one_plus_two_equals_three() -> Result<(), String> {
         let parsed = parse("1 + 2")?;
         assert_eq!(
-            Exp::Add(vec_deque![Exp::Literal(1), Exp::Literal(2)]),
+            Exp::Add(Rc::new(RefCell::new(vec_deque![
+                Exp::Literal(1),
+                Exp::Literal(2)
+            ]))),
             parsed
         );
         assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
@@ -193,11 +183,11 @@ mod tests {
         let parsed = parse("1 + 2 + 3")?;
         println!("{parsed:#?}");
         assert_eq!(
-            Exp::Add(vec_deque![
+            Exp::Add(Rc::new(RefCell::new(vec_deque![
                 Exp::Literal(1),
                 Exp::Literal(2),
                 Exp::Literal(3)
-            ]),
+            ]))),
             parsed
         );
         assert_eq!(6, parsed.evaluate(&mut ThreadRng::default()).value());

@@ -1,24 +1,50 @@
-use std::collections::VecDeque;
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use rand::Rng;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+macro_rules! vec_deque {
+    [] => {
+        VecDeque::new()
+    };
+    [ $( $x:expr ),* ] => {
+        {
+            let mut temp_vec = VecDeque::new();
+            $(
+                temp_vec.push_back($x);
+            )*
+            temp_vec
+        }
+    };
+}
+
+pub(crate) use vec_deque;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Exp {
     Unit,
     Literal(i32),
-    Roll(Box<Roll>),
-    Add(VecDeque<Exp>),
-    Sub(Vec<Exp>),
+    Roll(Rc<RefCell<Roll>>),
+    Add(Rc<RefCell<VecDeque<Exp>>>),
+    Sub(Rc<RefCell<Vec<Exp>>>),
 }
 
 impl Exp {
+    pub fn roll(roll: Roll) -> Exp {
+        Exp::Roll(Rc::new(RefCell::new(roll)))
+    }
+
+    pub fn add(vec: VecDeque<Exp>) -> Exp {
+        Exp::Add(Rc::new(RefCell::new(vec)))
+    }
+
     pub fn evaluate(&self, rng: &mut impl Rng) -> Value {
         match self {
             Exp::Unit => Value::Unit,
             Exp::Literal(value) => Value::Literal(*value),
-            Exp::Roll(roll) => Value::Rolled(roll.val(rng)),
+            Exp::Roll(roll) => Value::Rolled(roll.borrow().val(rng)),
             Exp::Add(subexpressions) => {
                 let values = subexpressions
+                    .borrow()
                     .iter()
                     .map(|subexpression| subexpression.evaluate(rng))
                     .collect();
@@ -26,6 +52,7 @@ impl Exp {
             }
             Exp::Sub(subexpressions) => {
                 let values = subexpressions
+                    .borrow()
                     .iter()
                     .map(|subexpression| subexpression.evaluate(rng))
                     .collect();
@@ -41,13 +68,13 @@ impl Default for Exp {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum KeepRule {
     Lowest,
     Highest,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Keep {
     retain: Exp,
     rule: KeepRule,
@@ -82,7 +109,7 @@ impl Keep {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Roll {
     dice: Exp,
     sides: Exp,
@@ -135,7 +162,7 @@ impl Roll {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Rolled {
     dice: Box<Value>,
     sides: Box<Value>,
@@ -148,7 +175,7 @@ impl Rolled {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Kept {
     rule: KeepRule,
     retained: Value,
@@ -166,7 +193,7 @@ impl Kept {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Value {
     Unit,
     Literal(i32),
@@ -196,23 +223,6 @@ impl Value {
         }
     }
 }
-
-macro_rules! vec_deque {
-    [] => {
-        VecDeque::new()
-    };
-    [ $( $x:expr ),* ] => {
-        {
-            let mut temp_vec = VecDeque::new();
-            $(
-                temp_vec.push_back($x);
-            )*
-            temp_vec
-        }
-    };
-}
-
-pub(crate) use vec_deque;
 
 #[cfg(test)]
 mod tests {
@@ -271,7 +281,7 @@ mod tests {
                 retain: Exp::Literal(1),
             },
         };
-        let expression = Exp::Roll(Box::new(roll));
+        let expression = Exp::Roll(Rc::new(RefCell::new(roll)));
         let expected = Value::Rolled(Rolled {
             dice: Box::new(Value::Literal(1)),
             sides: Box::new(Value::Literal(6)),
@@ -289,21 +299,21 @@ mod tests {
     fn dice_roll_variable_sides() {
         let mut rng = mock_rng![2, 3, 4];
         let roll = Roll {
-            dice: Exp::Roll(Box::new(Roll {
+            dice: Exp::roll(Roll {
                 dice: Exp::Literal(1),
                 sides: Exp::Literal(6),
                 keep: Keep {
                     retain: Exp::Literal(1),
                     rule: KeepRule::Highest,
                 },
-            })),
+            }),
             sides: Exp::Literal(6),
             keep: Keep {
                 rule: KeepRule::Highest,
                 retain: Exp::Literal(2),
             },
         };
-        let expression = Exp::Roll(Box::new(roll));
+        let expression = Exp::roll(roll);
         let expected = Value::Rolled(Rolled {
             dice: Box::new(Value::Rolled(Rolled {
                 dice: Box::new(Value::Literal(1)),
@@ -328,7 +338,7 @@ mod tests {
 
     #[test]
     fn one_plus_one() {
-        let exp = Exp::Add(vec_deque![Exp::Literal(1), Exp::Literal(1)]);
+        let exp = Exp::add(vec_deque![Exp::Literal(1), Exp::Literal(1)]);
         assert_eq!(2, exp.evaluate(&mut mock_rng![]).value())
     }
 

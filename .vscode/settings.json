@@ -4,6 +4,7 @@
         "Deque",
         "mockrng",
         "Peekable",
+        "rustfmt",
         "subexpression",
         "subexpressions",
         "vecdeque",
