@@ -4,6 +4,8 @@ use std::iter::Peekable;
 #[derive(Debug, PartialEq, Eq, Hash)]
 enum Token {
     Number(i32),
+    Plus,
+    Expression(Exp),
 }
 
 impl Token {
@@ -27,6 +29,10 @@ impl Token {
                 '0'..='9' | '-' => {
                     let number = Token::parse_number(chars)?;
                     return Ok(Token::Number(number));
+                }
+                '+' => {
+                    chars.next();
+                    return Ok(Token::Plus);
                 }
                 _ => {
                     let msg = format!("Encountered unexpected symbol '{c}' while tokenizing input");
@@ -66,15 +72,38 @@ impl Token {
     }
 }
 
+#[derive(Debug, Default)]
+struct ExpBuilder {
+    lookahead: Option<Token>,
+    tokens: Vec<Token>,
+}
+
+impl ExpBuilder {
+    fn amalgamate(&mut self, n: usize) -> Option<Exp> {
+        use Token::*;
+        let tail = self.tokens.split_off(n);
+        match &tail[..] {
+            [Number(a), Plus, Expression(exp)] => {
+                let expression = Exp::Add(vec![Exp::Literal(*a), exp.clone()]);
+                return Some(expression);
+            }
+            _ => None,
+        }
+    }
+}
+
 pub fn parse(input: &str) -> Result<Exp, String> {
     let tokenized = Token::tokenize(input)?;
     let mut tokens = tokenized.iter();
+    let mut expression = Exp::Unit;
+    // let mut stack = Vec::new();
     while let Some(token) = tokens.next() {
         match token {
             Token::Number(n) => return Ok(Exp::Literal(*n as i32)),
+            Token::Plus => todo!(),
         }
     }
-    todo!()
+    Ok(expression)
 }
 
 #[cfg(test)]
@@ -99,7 +128,7 @@ mod tests {
 
     #[test]
     fn simple_addition() -> Result<(), String> {
-        let parsed = parse("1 + 1");
+        // let parsed = parse("1 + 1");
         Ok(())
     }
 }

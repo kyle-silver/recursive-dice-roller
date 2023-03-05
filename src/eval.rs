@@ -1,7 +1,8 @@
 use rand::Rng;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Exp {
+    Unit,
     Literal(i32),
     Roll(Box<Roll>),
     Add(Vec<Exp>),
@@ -11,6 +12,7 @@ pub enum Exp {
 impl Exp {
     fn val(&self, rng: &mut impl Rng) -> Value {
         match self {
+            Exp::Unit => Value::Unit,
             Exp::Literal(value) => Value::Literal(*value),
             Exp::Roll(roll) => Value::Rolled(roll.val(rng)),
             Exp::Add(subexpressions) => {
@@ -31,13 +33,19 @@ impl Exp {
     }
 }
 
+impl Default for Exp {
+    fn default() -> Self {
+        Exp::Unit
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeepRule {
     Lowest,
     Highest,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Keep {
     retain: Exp,
     rule: KeepRule,
@@ -72,7 +80,7 @@ impl Keep {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Roll {
     dice: Exp,
     sides: Exp,
@@ -158,6 +166,7 @@ impl Kept {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Value {
+    Unit,
     Literal(i32),
     Rolled(Rolled),
     Add(Vec<Value>),
@@ -167,6 +176,7 @@ pub enum Value {
 impl Value {
     fn val(&self) -> i32 {
         match self {
+            Value::Unit => 0,
             Value::Literal(val) => *val,
             Value::Rolled(rolled) => rolled.val(),
             Value::Add(values) => values.iter().map(Value::val).sum(),
@@ -301,5 +311,11 @@ mod tests {
     fn one_plus_one() {
         let exp = Exp::Add(vec![Exp::Literal(1), Exp::Literal(1)]);
         assert_eq!(2, exp.val(&mut mock_rng![]).val())
+    }
+
+    #[test]
+    fn unit() {
+        let exp = Exp::Unit;
+        assert_eq!(Value::Unit, exp.val(&mut mock_rng![]));
     }
 }
