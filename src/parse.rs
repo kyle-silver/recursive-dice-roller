@@ -21,6 +21,7 @@ impl Token {
 
     fn next(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<Token, String> {
         while let Some(c) = chars.peek() {
+            println!("Current char: '{c}'");
             if c.is_whitespace() {
                 chars.next();
                 continue;
@@ -55,9 +56,12 @@ impl Token {
         // corral digits
         let mut digit_buffer = vec![];
         while let Some(c) = chars.peek() {
+            println!("parsing digit '{c}'");
             if c.is_ascii_digit() {
                 let next = chars.next().ok_or("value was present during peek")?;
                 digit_buffer.push(next);
+            } else {
+                break;
             }
         }
         let value: i32 = digit_buffer
@@ -79,35 +83,78 @@ struct ExpBuilder {
 }
 
 impl ExpBuilder {
-    fn amalgamate(&mut self, n: usize) -> Option<Exp> {
+    fn reduced(&mut self, n: usize) -> Option<Exp> {
         use Token::*;
-        let tail = self.tokens.split_off(n);
-        match &tail[..] {
-            [Number(a), Plus, Expression(exp)] => {
-                let expression = Exp::Add(vec![Exp::Literal(*a), exp.clone()]);
-                return Some(expression);
+        println!("({n})\t{self:#?}");
+        let Self { tokens, .. } = self;
+        let split_index = tokens.len() - n;
+        match &tokens[split_index..] {
+            [Number(_)] => match tokens.pop() {
+                Some(Number(n)) => return Some(Exp::Literal(n)),
+                _ => unreachable!("Pattern should be guaranteed"),
+            },
+            [Expression(_), Plus, Expression(_)] => {
+                let drained: [Token; 3] = tokens.split_off(split_index).try_into().unwrap();
+                match drained {
+                    [Expression(a), _, Expression(b)] => {
+                        let expression = Exp::Add(vec![a, b]);
+                        return Some(expression);
+                    }
+                    _ => unreachable!("Pattern should be guaranteed"),
+                }
             }
             _ => None,
+        }
+    }
+
+    fn reduce(&mut self) -> bool {
+        for window in 1..=self.tokens.len() {
+            if let Some(exp) = self.reduced(window) {
+                self.tokens.push(Token::Expression(exp));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn push(&mut self, token: Token) {
+        self.tokens.push(token);
+    }
+
+    fn build(&mut self) -> Result<Exp, String> {
+        if self.tokens.len() != 1 {
+            return Err("tokenized expression could not be parsed".into());
+        }
+        if let Some(Token::Expression(exp)) = self.tokens.pop() {
+            return Ok(exp);
+        } else {
+            return Err("Final item was not a token".into());
         }
     }
 }
 
 pub fn parse(input: &str) -> Result<Exp, String> {
+    println!("Tokenizing input");
     let tokenized = Token::tokenize(input)?;
-    let mut tokens = tokenized.iter();
-    let mut expression = Exp::Unit;
+    println!("Tokenized");
+    let mut tokens = tokenized.into_iter();
+    let mut exp_builder = ExpBuilder::default();
     // let mut stack = Vec::new();
     while let Some(token) = tokens.next() {
-        match token {
-            Token::Number(n) => return Ok(Exp::Literal(*n as i32)),
-            Token::Plus => todo!(),
-        }
+        println!("pushing {token:#?}");
+        exp_builder.push(token);
+        println!("reducing");
+        exp_builder.reduce();
+        println!("{exp_builder:#?}");
     }
-    Ok(expression)
+    while exp_builder.reduce() {}
+    return exp_builder.build();
 }
 
 #[cfg(test)]
 mod tests {
+    use rand::rngs::ThreadRng;
+
     use super::parse;
     use crate::eval::Exp;
 
@@ -120,15 +167,16 @@ mod tests {
 
     #[test]
     fn negative_number() -> Result<(), String> {
-        // to be honest, it's more like unary subtraction
         let parsed = parse("-432")?;
         assert_eq!(Exp::Literal(-432), parsed);
         Ok(())
     }
 
     #[test]
-    fn simple_addition() -> Result<(), String> {
-        // let parsed = parse("1 + 1");
+    fn one_plus_two_equals_three() -> Result<(), String> {
+        let parsed = parse("1 + 2")?;
+        assert_eq!(Exp::Add(vec![Exp::Literal(1), Exp::Literal(2)]), parsed);
+        assert_eq!(3, parsed.val(&mut ThreadRng::default()).val());
         Ok(())
     }
 }

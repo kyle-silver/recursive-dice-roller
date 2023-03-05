@@ -1,6 +1,6 @@
 use rand::Rng;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Exp {
     Unit,
     Literal(i32),
@@ -10,7 +10,7 @@ pub enum Exp {
 }
 
 impl Exp {
-    fn val(&self, rng: &mut impl Rng) -> Value {
+    pub fn val(&self, rng: &mut impl Rng) -> Value {
         match self {
             Exp::Unit => Value::Unit,
             Exp::Literal(value) => Value::Literal(*value),
@@ -45,7 +45,7 @@ pub enum KeepRule {
     Highest,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Keep {
     retain: Exp,
     rule: KeepRule,
@@ -80,7 +80,7 @@ impl Keep {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Roll {
     dice: Exp,
     sides: Exp,
@@ -174,7 +174,7 @@ pub enum Value {
 }
 
 impl Value {
-    fn val(&self) -> i32 {
+    pub fn val(&self) -> i32 {
         match self {
             Value::Unit => 0,
             Value::Literal(val) => *val,
