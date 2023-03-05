@@ -192,8 +192,15 @@ mod tests {
     fn multi_add() -> Result<(), String> {
         let parsed = parse("1 + 2 + 3")?;
         println!("{parsed:#?}");
-        // assert_eq!(Exp::Add(vec![Exp::Literal(1), Exp::Literal(2)]), parsed);
-        // assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
+        assert_eq!(
+            Exp::Add(vec_deque![
+                Exp::Literal(1),
+                Exp::Literal(2),
+                Exp::Literal(3)
+            ]),
+            parsed
+        );
+        assert_eq!(6, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
 }
