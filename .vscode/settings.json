@@ -1,9 +1,12 @@
 {
     "editor.formatOnSave": true,
     "cSpell.words": [
+        "Deque",
         "mockrng",
         "Peekable",
         "subexpression",
-        "subexpressions"
+        "subexpressions",
+        "vecdeque",
+        "vecdequeue"
     ]
 }

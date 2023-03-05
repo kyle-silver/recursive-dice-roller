@@ -1,5 +1,5 @@
-use crate::eval::Exp;
-use std::iter::Peekable;
+use crate::eval::{vec_deque, Exp};
+use std::{collections::VecDeque, iter::Peekable};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 enum Token {
@@ -82,6 +82,7 @@ struct ExpBuilder {
 
 impl ExpBuilder {
     fn reduced(&mut self, n: usize) -> Option<Exp> {
+        use Exp::*;
         use Token::*;
         let Self { tokens, .. } = self;
         let split_index = tokens.len() - n;
@@ -90,11 +91,22 @@ impl ExpBuilder {
                 Some(Number(n)) => return Some(Exp::Literal(n)),
                 _ => unreachable!("Pattern should be guaranteed"),
             },
+            [Expression(_), Plus, Expression(Add(_))] => {
+                let drained: [Token; 3] = tokens.split_off(split_index).try_into().unwrap();
+                match drained {
+                    [Expression(exp), _, Expression(Add(mut vec))] => {
+                        vec.push_front(exp);
+                        let expression = Exp::Add(vec);
+                        return Some(expression);
+                    }
+                    _ => unreachable!("Pattern should be guaranteed"),
+                }
+            }
             [Expression(_), Plus, Expression(_)] => {
                 let drained: [Token; 3] = tokens.split_off(split_index).try_into().unwrap();
                 match drained {
                     [Expression(a), _, Expression(b)] => {
-                        let expression = Exp::Add(vec![a, b]);
+                        let expression = Exp::Add(vec_deque![a, b]);
                         return Some(expression);
                     }
                     _ => unreachable!("Pattern should be guaranteed"),
@@ -148,7 +160,8 @@ mod tests {
     use rand::rngs::ThreadRng;
 
     use super::parse;
-    use crate::eval::Exp;
+    use crate::eval::{vec_deque, Exp};
+    use std::collections::VecDeque;
 
     #[test]
     fn numeric_literal() -> Result<(), String> {
@@ -167,8 +180,20 @@ mod tests {
     #[test]
     fn one_plus_two_equals_three() -> Result<(), String> {
         let parsed = parse("1 + 2")?;
-        assert_eq!(Exp::Add(vec![Exp::Literal(1), Exp::Literal(2)]), parsed);
+        assert_eq!(
+            Exp::Add(vec_deque![Exp::Literal(1), Exp::Literal(2)]),
+            parsed
+        );
         assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn multi_add() -> Result<(), String> {
+        let parsed = parse("1 + 2 + 3")?;
+        println!("{parsed:#?}");
+        // assert_eq!(Exp::Add(vec![Exp::Literal(1), Exp::Literal(2)]), parsed);
+        // assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
 }

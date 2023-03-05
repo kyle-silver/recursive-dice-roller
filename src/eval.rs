@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use rand::Rng;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -5,7 +7,7 @@ pub enum Exp {
     Unit,
     Literal(i32),
     Roll(Box<Roll>),
-    Add(Vec<Exp>),
+    Add(VecDeque<Exp>),
     Sub(Vec<Exp>),
 }
 
@@ -195,6 +197,23 @@ impl Value {
     }
 }
 
+macro_rules! vec_deque {
+    [] => {
+        VecDeque::new()
+    };
+    [ $( $x:expr ),* ] => {
+        {
+            let mut temp_vec = VecDeque::new();
+            $(
+                temp_vec.push_back($x);
+            )*
+            temp_vec
+        }
+    };
+}
+
+pub(crate) use vec_deque;
+
 #[cfg(test)]
 mod tests {
     use crate::eval::*;
@@ -309,7 +328,7 @@ mod tests {
 
     #[test]
     fn one_plus_one() {
-        let exp = Exp::Add(vec![Exp::Literal(1), Exp::Literal(1)]);
+        let exp = Exp::Add(vec_deque![Exp::Literal(1), Exp::Literal(1)]);
         assert_eq!(2, exp.evaluate(&mut mock_rng![]).value())
     }
 
