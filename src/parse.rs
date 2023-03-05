@@ -21,7 +21,6 @@ impl Token {
 
     fn next(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<Token, String> {
         while let Some(c) = chars.peek() {
-            println!("Current char: '{c}'");
             if c.is_whitespace() {
                 chars.next();
                 continue;
@@ -56,7 +55,6 @@ impl Token {
         // corral digits
         let mut digit_buffer = vec![];
         while let Some(c) = chars.peek() {
-            println!("parsing digit '{c}'");
             if c.is_ascii_digit() {
                 let next = chars.next().ok_or("value was present during peek")?;
                 digit_buffer.push(next);
@@ -85,7 +83,6 @@ struct ExpBuilder {
 impl ExpBuilder {
     fn reduced(&mut self, n: usize) -> Option<Exp> {
         use Token::*;
-        println!("({n})\t{self:#?}");
         let Self { tokens, .. } = self;
         let split_index = tokens.len() - n;
         match &tokens[split_index..] {
@@ -134,18 +131,13 @@ impl ExpBuilder {
 }
 
 pub fn parse(input: &str) -> Result<Exp, String> {
-    println!("Tokenizing input");
     let tokenized = Token::tokenize(input)?;
-    println!("Tokenized");
     let mut tokens = tokenized.into_iter();
     let mut exp_builder = ExpBuilder::default();
     // let mut stack = Vec::new();
     while let Some(token) = tokens.next() {
-        println!("pushing {token:#?}");
         exp_builder.push(token);
-        println!("reducing");
         exp_builder.reduce();
-        println!("{exp_builder:#?}");
     }
     while exp_builder.reduce() {}
     return exp_builder.build();
@@ -176,7 +168,7 @@ mod tests {
     fn one_plus_two_equals_three() -> Result<(), String> {
         let parsed = parse("1 + 2")?;
         assert_eq!(Exp::Add(vec![Exp::Literal(1), Exp::Literal(2)]), parsed);
-        assert_eq!(3, parsed.val(&mut ThreadRng::default()).val());
+        assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
 }

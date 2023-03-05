@@ -10,7 +10,7 @@ pub enum Exp {
 }
 
 impl Exp {
-    pub fn val(&self, rng: &mut impl Rng) -> Value {
+    pub fn evaluate(&self, rng: &mut impl Rng) -> Value {
         match self {
             Exp::Unit => Value::Unit,
             Exp::Literal(value) => Value::Literal(*value),
@@ -18,14 +18,14 @@ impl Exp {
             Exp::Add(subexpressions) => {
                 let values = subexpressions
                     .iter()
-                    .map(|subexpression| subexpression.val(rng))
+                    .map(|subexpression| subexpression.evaluate(rng))
                     .collect();
                 Value::Add(values)
             }
             Exp::Sub(subexpressions) => {
                 let values = subexpressions
                     .iter()
-                    .map(|subexpression| subexpression.val(rng))
+                    .map(|subexpression| subexpression.evaluate(rng))
                     .collect();
                 Value::Sub(values)
             }
@@ -54,12 +54,12 @@ pub struct Keep {
 impl Keep {
     fn retain(&self, elements: &[i32], rng: &mut impl Rng) -> Kept {
         // get the number of elements to retain
-        let retained = self.retain.val(rng);
+        let retained = self.retain.evaluate(rng);
 
         // make sure that we are keeping a legal number of elements. The number
         // must be between zero (inclusive) and the total number of elements
         // available
-        let n = (retained.val().max(0) as usize).min(elements.len());
+        let n = (retained.value().max(0) as usize).min(elements.len());
 
         // calculate the index at which to split the slice
         let index = match self.rule {
@@ -90,18 +90,18 @@ pub struct Roll {
 impl Roll {
     fn val(&self, rng: &mut impl Rng) -> Rolled {
         // first we need to evaluate how many sides the die has
-        let sides = self.sides.val(rng);
-        let _sides = sides.val().abs() as u32;
+        let sides = self.sides.evaluate(rng);
+        let _sides = sides.value().abs() as u32;
 
         // then we need to determine the number of dice
-        let dice = self.dice.val(rng);
+        let dice = self.dice.evaluate(rng);
 
         // once we have both of these, we can begin to actually "roll" the dice
         // and start accumulating values
         let mut rolled = Vec::new();
 
         // if the number of dice is somehow negative, we don't do any rolls
-        for _ in 0..dice.val().max(0) {
+        for _ in 0..dice.value().max(0) {
             // zero-sided die means a value of zero because I get to make the
             // rules
             if _sides == 0 {
@@ -174,20 +174,20 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn val(&self) -> i32 {
+    pub fn value(&self) -> i32 {
         match self {
             Value::Unit => 0,
             Value::Literal(val) => *val,
             Value::Rolled(rolled) => rolled.val(),
-            Value::Add(values) => values.iter().map(Value::val).sum(),
+            Value::Add(values) => values.iter().map(Value::value).sum(),
             Value::Sub(values) => {
                 let mut values = values.iter();
                 let mut acc = values
                     .next()
                     .expect("values is guaranteed to have at least one element")
-                    .val();
+                    .value();
                 while let Some(value) = values.next() {
-                    acc -= value.val();
+                    acc -= value.value();
                 }
                 return acc;
             }
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn expression_literal() {
         let mut rng = mock_rng![];
-        assert_eq!(Value::Literal(5), Exp::Literal(5).val(&mut rng))
+        assert_eq!(Value::Literal(5), Exp::Literal(5).evaluate(&mut rng))
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
                 highest: vec![3],
             }),
         });
-        assert_eq!(expected, expression.val(&mut rng))
+        assert_eq!(expected, expression.evaluate(&mut rng))
     }
 
     #[test]
@@ -304,18 +304,18 @@ mod tests {
                 highest: vec![3, 4],
             }),
         });
-        assert_eq!(expected, expression.val(&mut rng))
+        assert_eq!(expected, expression.evaluate(&mut rng))
     }
 
     #[test]
     fn one_plus_one() {
         let exp = Exp::Add(vec![Exp::Literal(1), Exp::Literal(1)]);
-        assert_eq!(2, exp.val(&mut mock_rng![]).val())
+        assert_eq!(2, exp.evaluate(&mut mock_rng![]).value())
     }
 
     #[test]
     fn unit() {
         let exp = Exp::Unit;
-        assert_eq!(Value::Unit, exp.val(&mut mock_rng![]));
+        assert_eq!(Value::Unit, exp.evaluate(&mut mock_rng![]));
     }
 }
