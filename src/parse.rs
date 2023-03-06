@@ -5,6 +5,7 @@ use std::{collections::VecDeque, iter::Peekable};
 enum Token {
     Number(i32),
     Plus,
+    Minus,
     Times,
     OpenParen,
     CloseParen,
@@ -39,9 +40,18 @@ impl Token {
                     chars.next();
                     return Ok(Token::CloseParen);
                 }
-                '0'..='9' | '-' => {
+                '0'..='9' => {
                     let number = Token::parse_number(chars)?;
                     return Ok(Token::Number(number));
+                }
+                '-' => {
+                    // consume the minus sign
+                    chars.next();
+                    if chars.peek().map(char::is_ascii_digit).unwrap_or(false) {
+                        let number = Token::parse_number(chars)?;
+                        return Ok(Token::Number(-number));
+                    }
+                    return Ok(Token::Minus);
                 }
                 '+' => {
                     chars.next();
@@ -106,7 +116,7 @@ impl ExpBuilder {
             // the most basic thing we can do is convert a number literal into
             // constant expression
             [Number(n)] => {
-                return Some(Exp::Literal(*n));
+                return Some(Exp::Const(*n));
             }
             // parentheses supersede all operator precedence rules
             [OpenParen, Expression(exp), CloseParen] => {
@@ -135,6 +145,27 @@ impl ExpBuilder {
                     return None;
                 }
                 let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
+                return Some(expression);
+            }
+            // subtraction rules; largely analogous to the addition rules,
+            // although I'm not sure that I would want to combine them.
+            [Expression(Sub(subtrahends)), Minus, Expression(minuend)] => {
+                let arguments = subtrahends.clone();
+                arguments.borrow_mut().push_back(minuend.clone());
+                let expression = Exp::Sub(arguments);
+                return Some(expression);
+            }
+            [Expression(subtrahend), Minus, Expression(Add(minuend))] => {
+                let arguments = minuend.clone();
+                arguments.borrow_mut().push_front(subtrahend.clone());
+                let expression = Exp::Sub(arguments);
+                return Some(expression);
+            }
+            [Expression(a), Minus, Expression(b)] => {
+                if let Some(Times) = self.lookahead {
+                    return None;
+                }
+                let expression = Exp::sub(vec_deque![a.clone(), b.clone()]);
                 return Some(expression);
             }
             // multiplication rules, including a similar optimization for
@@ -200,14 +231,14 @@ mod tests {
     #[test]
     fn numeric_literal() -> Result<(), String> {
         let parsed = parse("42")?;
-        assert_eq!(Exp::Literal(42), parsed);
+        assert_eq!(Exp::Const(42), parsed);
         Ok(())
     }
 
     #[test]
     fn negative_number() -> Result<(), String> {
         let parsed = parse("-432")?;
-        assert_eq!(Exp::Literal(-432), parsed);
+        assert_eq!(Exp::Const(-432), parsed);
         Ok(())
     }
 
@@ -216,8 +247,8 @@ mod tests {
         let parsed = parse("1 + 2")?;
         assert_eq!(
             Exp::Add(Rc::new(RefCell::new(vec_deque![
-                Exp::Literal(1),
-                Exp::Literal(2)
+                Exp::Const(1),
+                Exp::Const(2)
             ]))),
             parsed
         );
@@ -229,11 +260,7 @@ mod tests {
     fn multi_add() -> Result<(), String> {
         let parsed = parse("1 + 2 + 3")?;
         assert_eq!(
-            Exp::add(vec_deque![
-                Exp::Literal(1),
-                Exp::Literal(2),
-                Exp::Literal(3)
-            ]),
+            Exp::add(vec_deque![Exp::Const(1), Exp::Const(2), Exp::Const(3)]),
             parsed
         );
         assert_eq!(6, parsed.evaluate(&mut ThreadRng::default()).value());
@@ -245,10 +272,10 @@ mod tests {
         let parsed = parse("0 + ((1) + 2) + 3")?;
         assert_eq!(
             Exp::add(vec_deque![
-                Exp::Literal(0),
-                Exp::Literal(1),
-                Exp::Literal(2),
-                Exp::Literal(3)
+                Exp::Const(0),
+                Exp::Const(1),
+                Exp::Const(2),
+                Exp::Const(3)
             ]),
             parsed
         );
@@ -258,10 +285,7 @@ mod tests {
     #[test]
     fn simple_multiplication() -> Result<(), String> {
         let parsed = parse("2 * -3")?;
-        assert_eq!(
-            Exp::mul(vec_deque![Exp::Literal(2), Exp::Literal(-3)]),
-            parsed
-        );
+        assert_eq!(Exp::mul(vec_deque![Exp::Const(2), Exp::Const(-3)]), parsed);
         assert_eq!(-6, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
@@ -271,8 +295,8 @@ mod tests {
         let parsed = parse("4 + 2 * -3")?;
         assert_eq!(
             Exp::add(vec_deque![
-                Exp::Literal(4),
-                Exp::mul(vec_deque![Exp::Literal(2), Exp::Literal(-3)])
+                Exp::Const(4),
+                Exp::mul(vec_deque![Exp::Const(2), Exp::Const(-3)])
             ]),
             parsed
         );
@@ -284,8 +308,8 @@ mod tests {
         let parsed = parse("(4 + 2) * -3")?;
         assert_eq!(
             Exp::mul(vec_deque![
-                Exp::add(vec_deque![Exp::Literal(4), Exp::Literal(2)]),
-                Exp::Literal(-3)
+                Exp::add(vec_deque![Exp::Const(4), Exp::Const(2)]),
+                Exp::Const(-3)
             ]),
             parsed
         );
@@ -298,14 +322,50 @@ mod tests {
         let parsed = parse("1 + 2 * 3 + 4 + 5")?;
         assert_eq!(
             Exp::add(vec_deque![
-                Exp::Literal(1),
-                Exp::mul(vec_deque![Exp::Literal(2), Exp::Literal(3)]),
-                Exp::Literal(4),
-                Exp::Literal(5)
+                Exp::Const(1),
+                Exp::mul(vec_deque![Exp::Const(2), Exp::Const(3)]),
+                Exp::Const(4),
+                Exp::Const(5)
             ]),
             parsed
         );
         assert_eq!(16, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn simple_subtraction() -> Result<(), String> {
+        let parsed = parse("1 - 2 * 3 - 4 - 5")?;
+        assert_eq!(
+            Exp::sub(vec_deque![
+                Exp::Const(1),
+                Exp::mul(vec_deque![Exp::Const(2), Exp::Const(3)]),
+                Exp::Const(4),
+                Exp::Const(5)
+            ]),
+            parsed
+        );
+        assert_eq!(-14, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn all_math_operations() -> Result<(), String> {
+        let parsed = parse("1 + 2 * (3 - 4) - 5")?;
+        assert_eq!(
+            Exp::sub(vec_deque![
+                Exp::add(vec_deque![
+                    Exp::Const(1),
+                    Exp::mul(vec_deque![
+                        Exp::Const(2),
+                        Exp::sub(vec_deque![Exp::Const(3), Exp::Const(4)])
+                    ])
+                ]),
+                Exp::Const(5)
+            ]),
+            parsed
+        );
+        assert_eq!(-6, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
 }
