@@ -26,6 +26,7 @@ pub enum Exp {
     Roll(Rc<RefCell<Roll>>),
     Add(Rc<RefCell<VecDeque<Exp>>>),
     Sub(Rc<RefCell<Vec<Exp>>>),
+    Mul(Rc<RefCell<VecDeque<Exp>>>),
 }
 
 impl Exp {
@@ -57,6 +58,14 @@ impl Exp {
                     .map(|subexpression| subexpression.evaluate(rng))
                     .collect();
                 Value::Sub(values)
+            }
+            Exp::Mul(subexpressions) => {
+                let values = subexpressions
+                    .borrow()
+                    .iter()
+                    .map(|subexpression| subexpression.evaluate(rng))
+                    .collect();
+                Value::Mul(values)
             }
         }
     }
@@ -200,6 +209,7 @@ pub enum Value {
     Rolled(Rolled),
     Add(Vec<Value>),
     Sub(Vec<Value>),
+    Mul(Vec<Value>),
 }
 
 impl Value {
@@ -220,6 +230,7 @@ impl Value {
                 }
                 return acc;
             }
+            Value::Mul(values) => values.iter().map(Value::value).product(),
         }
     }
 }
