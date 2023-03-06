@@ -1,10 +1,12 @@
 use crate::eval::{vec_deque, Exp};
-use std::{cell::RefCell, collections::VecDeque, iter::Peekable, rc::Rc};
+use std::{collections::VecDeque, iter::Peekable};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Token {
     Number(i32),
     Plus,
+    OpenParen,
+    CloseParen,
     Expression(Exp),
 }
 
@@ -26,6 +28,14 @@ impl Token {
                 continue;
             }
             match c {
+                '(' => {
+                    chars.next();
+                    return Ok(Token::OpenParen);
+                }
+                ')' => {
+                    chars.next();
+                    return Ok(Token::CloseParen);
+                }
                 '0'..='9' | '-' => {
                     let number = Token::parse_number(chars)?;
                     return Ok(Token::Number(number));
@@ -88,6 +98,13 @@ impl ExpBuilder {
         let split = tokens.len() - n;
         match &mut tokens[split..] {
             [Number(n)] => return Some(Exp::Literal(*n)),
+            [OpenParen, Expression(exp), CloseParen] => return Some(exp.clone()),
+            [Expression(Add(augends)), Plus, Expression(addend)] => {
+                let arguments = augends.clone();
+                arguments.borrow_mut().push_back(addend.clone());
+                let expression = Exp::Add(arguments);
+                return Some(expression);
+            }
             [Expression(augend), Plus, Expression(Add(addends))] => {
                 let arguments = addends.clone();
                 arguments.borrow_mut().push_front(augend.clone());
@@ -136,9 +153,9 @@ pub fn parse(input: &str) -> Result<Exp, String> {
     // let mut stack = Vec::new();
     while let Some(token) = tokens.next() {
         exp_builder.push(token);
-        exp_builder.reduce();
+        // exp_builder.reduce();
+        while exp_builder.reduce() {}
     }
-    while exp_builder.reduce() {}
     return exp_builder.build();
 }
 
@@ -181,16 +198,30 @@ mod tests {
     #[test]
     fn multi_add() -> Result<(), String> {
         let parsed = parse("1 + 2 + 3")?;
-        println!("{parsed:#?}");
         assert_eq!(
-            Exp::Add(Rc::new(RefCell::new(vec_deque![
+            Exp::add(vec_deque![
                 Exp::Literal(1),
                 Exp::Literal(2),
                 Exp::Literal(3)
-            ]))),
+            ]),
             parsed
         );
         assert_eq!(6, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn paren() -> Result<(), String> {
+        let parsed = parse("0 + ((1) + 2) + 3")?;
+        assert_eq!(
+            Exp::add(vec_deque![
+                Exp::Literal(0),
+                Exp::Literal(1),
+                Exp::Literal(2),
+                Exp::Literal(3)
+            ]),
+            parsed
+        );
         Ok(())
     }
 }
