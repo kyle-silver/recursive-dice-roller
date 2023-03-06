@@ -103,8 +103,18 @@ impl ExpBuilder {
         use Token::*;
         let Self { tokens, .. } = self;
         match &mut tokens[split..] {
-            [Number(n)] => return Some(Exp::Literal(*n)),
-            [OpenParen, Expression(exp), CloseParen] => return Some(exp.clone()),
+            // the most basic thing we can do is convert a number literal into
+            // constant expression
+            [Number(n)] => {
+                return Some(Exp::Literal(*n));
+            }
+            // parentheses supersede all operator precedence rules
+            [OpenParen, Expression(exp), CloseParen] => {
+                return Some(exp.clone());
+            }
+            // addition rules, including an optimization where multiple repeated
+            // additions are collapsed into a single vector rather than being a
+            // very lopsided tree
             [Expression(Add(augends)), Plus, Expression(addend)] => {
                 let arguments = augends.clone();
                 arguments.borrow_mut().push_back(addend.clone());
@@ -117,10 +127,6 @@ impl ExpBuilder {
                 let expression = Exp::Add(arguments);
                 return Some(expression);
             }
-            [Expression(a), Times, Expression(b)] => {
-                let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
-                return Some(expression);
-            }
             [Expression(a), Plus, Expression(b)] => {
                 // the times operator has greater precedence and so we don't
                 // want to reduce if the addition is immediately succeeded by a
@@ -131,6 +137,13 @@ impl ExpBuilder {
                 let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
                 return Some(expression);
             }
+            // multiplication rules, including a similar optimization for
+            // repeated applications to the addition rules
+            [Expression(a), Times, Expression(b)] => {
+                let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
+                return Some(expression);
+            }
+
             _ => None,
         }
     }
