@@ -17,7 +17,7 @@ impl Token {
     fn tokenize(input: &str) -> Result<Vec<Token>, String> {
         let mut chars = input.chars().peekable();
         let mut tokens = Vec::new();
-        while let Some(_) = chars.peek() {
+        while chars.peek().is_some() {
             let token = Self::next(&mut chars)?;
             tokens.push(token);
         }
@@ -49,7 +49,7 @@ impl Token {
                     chars.next();
                     if chars.peek().map(char::is_ascii_digit).unwrap_or(false) {
                         let number = Token::parse_number(chars)?;
-                        return Ok(Token::Number(-number));
+                        return Ok(Token::Number(-1 * number));
                     }
                     return Ok(Token::Minus);
                 }
@@ -71,14 +71,6 @@ impl Token {
     }
 
     fn parse_number(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<i32, String> {
-        // handle negatives
-        let &first_char = chars.peek().ok_or("unexpected end of input")?;
-        let sign = if first_char == '-' {
-            chars.next();
-            -1
-        } else {
-            1
-        };
         // corral digits
         let mut digit_buffer = vec![];
         while let Some(c) = chars.peek() {
@@ -97,7 +89,7 @@ impl Token {
             .map(|(i, digit)| digit * 10i32.pow(i as u32))
             .sum();
 
-        return Ok(sign * value);
+        return Ok(value);
     }
 }
 
@@ -211,9 +203,9 @@ impl ExpBuilder {
 
 pub fn parse(input: &str) -> Result<Exp, String> {
     let tokenized = Token::tokenize(input)?;
-    let mut tokens = tokenized.into_iter();
+    let tokens = tokenized.into_iter();
     let mut exp_builder = ExpBuilder::default();
-    while let Some(token) = tokens.next() {
+    for token in tokens {
         exp_builder.push(token);
         while exp_builder.reduce() {}
     }

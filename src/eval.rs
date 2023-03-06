@@ -120,8 +120,8 @@ impl Keep {
         Kept {
             rule: self.rule,
             retained,
-            lowest: lowest.iter().cloned().collect(),
-            highest: highest.iter().cloned().collect(),
+            lowest: lowest.to_vec(),
+            highest: highest.to_vec(),
         }
     }
 }
@@ -137,7 +137,7 @@ impl Roll {
     fn val(&self, rng: &mut impl Rng) -> Rolled {
         // first we need to evaluate how many sides the die has
         let sides = self.sides.evaluate(rng);
-        let _sides = sides.value().abs() as u32;
+        let _sides = sides.value().unsigned_abs();
 
         // then we need to determine the number of dice
         let dice = self.dice.evaluate(rng);
@@ -233,7 +233,7 @@ impl Value {
                     .next()
                     .expect("values is guaranteed to have at least one element")
                     .value();
-                while let Some(value) = values.next() {
+                for value in values {
                     acc -= value.value();
                 }
                 return acc;
