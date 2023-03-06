@@ -214,10 +214,9 @@ pub fn parse(input: &str) -> Result<Exp, String> {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::ThreadRng;
-
     use super::parse;
     use crate::eval::{vec_deque, Exp};
+    use rand::rngs::ThreadRng;
     use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
     #[test]
