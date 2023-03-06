@@ -25,7 +25,7 @@ pub enum Exp {
     Literal(i32),
     Roll(Rc<RefCell<Roll>>),
     Add(Rc<RefCell<VecDeque<Exp>>>),
-    Sub(Rc<RefCell<Vec<Exp>>>),
+    Sub(Rc<RefCell<VecDeque<Exp>>>),
     Mul(Rc<RefCell<VecDeque<Exp>>>),
 }
 
@@ -36,6 +36,10 @@ impl Exp {
 
     pub fn add(vec: VecDeque<Exp>) -> Exp {
         Exp::Add(Rc::new(RefCell::new(vec)))
+    }
+
+    pub fn mul(vec: VecDeque<Exp>) -> Exp {
+        Exp::Mul(Rc::new(RefCell::new(vec)))
     }
 
     pub fn evaluate(&self, rng: &mut impl Rng) -> Value {

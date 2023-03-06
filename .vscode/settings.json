@@ -4,6 +4,7 @@
         "Deque",
         "mockrng",
         "Peekable",
+        "rngs",
         "rustfmt",
         "subexpression",
         "subexpressions",

@@ -1,13 +1,15 @@
 use crate::eval::{vec_deque, Exp};
 use std::{collections::VecDeque, iter::Peekable};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Token {
     Number(i32),
     Plus,
+    Times,
     OpenParen,
     CloseParen,
     Expression(Exp),
+    EndOfStream,
 }
 
 impl Token {
@@ -18,6 +20,7 @@ impl Token {
             let token = Self::next(&mut chars)?;
             tokens.push(token);
         }
+        tokens.push(Token::EndOfStream);
         Ok(tokens)
     }
 
@@ -43,6 +46,10 @@ impl Token {
                 '+' => {
                     chars.next();
                     return Ok(Token::Plus);
+                }
+                '*' => {
+                    chars.next();
+                    return Ok(Token::Times);
                 }
                 _ => {
                     let msg = format!("Encountered unexpected symbol '{c}' while tokenizing input");
@@ -91,11 +98,10 @@ struct ExpBuilder {
 }
 
 impl ExpBuilder {
-    fn reduced(&mut self, n: usize) -> Option<Exp> {
+    fn reduced(&mut self, split: usize) -> Option<Exp> {
         use Exp::*;
         use Token::*;
         let Self { tokens, .. } = self;
-        let split = tokens.len() - n;
         match &mut tokens[split..] {
             [Number(n)] => return Some(Exp::Literal(*n)),
             [OpenParen, Expression(exp), CloseParen] => return Some(exp.clone()),
@@ -111,7 +117,17 @@ impl ExpBuilder {
                 let expression = Exp::Add(arguments);
                 return Some(expression);
             }
+            [Expression(a), Times, Expression(b)] => {
+                let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
+                return Some(expression);
+            }
             [Expression(a), Plus, Expression(b)] => {
+                // the times operator has greater precedence and so we don't
+                // want to reduce if the addition is immediately succeeded by a
+                // multiplication
+                if let Some(Times) = self.lookahead {
+                    return None;
+                }
                 let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
                 return Some(expression);
             }
@@ -120,9 +136,9 @@ impl ExpBuilder {
     }
 
     fn reduce(&mut self) -> bool {
-        for window in 1..=self.tokens.len() {
-            if let Some(exp) = self.reduced(window) {
-                self.tokens.drain((self.tokens.len() - window)..);
+        for split_at in (0..self.tokens.len()).rev() {
+            if let Some(exp) = self.reduced(split_at) {
+                self.tokens.drain(split_at..);
                 self.tokens.push(Token::Expression(exp));
                 return true;
             }
@@ -131,7 +147,10 @@ impl ExpBuilder {
     }
 
     fn push(&mut self, token: Token) {
-        self.tokens.push(token);
+        if let Some(t) = &self.lookahead {
+            self.tokens.push(t.clone());
+        }
+        self.lookahead = Some(token);
     }
 
     fn build(&mut self) -> Result<Exp, String> {
@@ -150,10 +169,8 @@ pub fn parse(input: &str) -> Result<Exp, String> {
     let tokenized = Token::tokenize(input)?;
     let mut tokens = tokenized.into_iter();
     let mut exp_builder = ExpBuilder::default();
-    // let mut stack = Vec::new();
     while let Some(token) = tokens.next() {
         exp_builder.push(token);
-        // exp_builder.reduce();
         while exp_builder.reduce() {}
     }
     return exp_builder.build();
@@ -222,6 +239,60 @@ mod tests {
             ]),
             parsed
         );
+        Ok(())
+    }
+
+    #[test]
+    fn simple_multiplication() -> Result<(), String> {
+        let parsed = parse("2 * -3")?;
+        assert_eq!(
+            Exp::mul(vec_deque![Exp::Literal(2), Exp::Literal(-3)]),
+            parsed
+        );
+        assert_eq!(-6, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn basic_operator_precedence() -> Result<(), String> {
+        let parsed = parse("4 + 2 * -3")?;
+        assert_eq!(
+            Exp::add(vec_deque![
+                Exp::Literal(4),
+                Exp::mul(vec_deque![Exp::Literal(2), Exp::Literal(-3)])
+            ]),
+            parsed
+        );
+        assert_eq!(-2, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+    #[test]
+    fn parens_override_operators() -> Result<(), String> {
+        let parsed = parse("(4 + 2) * -3")?;
+        assert_eq!(
+            Exp::mul(vec_deque![
+                Exp::add(vec_deque![Exp::Literal(4), Exp::Literal(2)]),
+                Exp::Literal(-3)
+            ]),
+            parsed
+        );
+        assert_eq!(-18, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn row_of_adds() -> Result<(), String> {
+        let parsed = parse("1 + 2 * 3 + 4 + 5")?;
+        assert_eq!(
+            Exp::add(vec_deque![
+                Exp::Literal(1),
+                Exp::mul(vec_deque![Exp::Literal(2), Exp::Literal(3)]),
+                Exp::Literal(4),
+                Exp::Literal(5)
+            ]),
+            parsed
+        );
+        assert_eq!(16, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
 }
