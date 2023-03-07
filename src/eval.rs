@@ -107,7 +107,7 @@ impl Keep {
             Keep::Highest(exp) => exp.evaluate(rng),
             Keep::All => {
                 return Kept {
-                    rule: self.clone(),
+                    keep: self.clone(),
                     retained: Value::Const(elements.len() as i32),
                     lowest: Vec::new(),
                     highest: elements.to_vec(),
@@ -121,9 +121,10 @@ impl Keep {
         let n = (retained.value().max(0) as usize).min(elements.len());
 
         // calculate the index at which to split the slice
-        let index = match self {
-            Lowest => n,
-            Highest => elements.len() - n,
+        let index = match &self {
+            Keep::Lowest(_) => n,
+            Keep::Highest(_) => elements.len() - n,
+            Keep::All => unreachable!("variant was handled earlier"),
         };
 
         // split the slice
@@ -131,7 +132,7 @@ impl Keep {
 
         // return all of this nonsense
         Kept {
-            rule: self.clone(),
+            keep: self.clone(),
             retained,
             lowest: lowest.to_vec(),
             highest: highest.to_vec(),
@@ -217,7 +218,7 @@ impl Rolled {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Kept {
-    rule: Keep,
+    keep: Keep,
     retained: Value,
     lowest: Vec<i32>,
     highest: Vec<i32>,
@@ -225,7 +226,7 @@ pub struct Kept {
 
 impl Kept {
     fn val(&self) -> i32 {
-        let to_sum = match &self.rule {
+        let to_sum = match &self.keep {
             Keep::Lowest(_) => &self.lowest,
             _ => &self.highest,
         };
@@ -325,7 +326,7 @@ mod tests {
             dice: Box::new(Value::Const(1)),
             sides: Box::new(Value::Const(6)),
             kept: Box::new(Kept {
-                rule: Keep::All,
+                keep: Keep::All,
                 retained: Value::Const(1),
                 lowest: vec![],
                 highest: vec![3],
@@ -352,7 +353,7 @@ mod tests {
                 dice: Box::new(Value::Const(1)),
                 sides: Box::new(Value::Const(6)),
                 kept: Box::new(Kept {
-                    rule: Keep::All,
+                    keep: Keep::All,
                     retained: Value::Const(1),
                     lowest: vec![],
                     highest: vec![2],
@@ -360,7 +361,7 @@ mod tests {
             })),
             sides: Box::new(Value::Const(6)),
             kept: Box::new(Kept {
-                rule: Keep::All,
+                keep: Keep::All,
                 retained: Value::Const(2),
                 lowest: vec![],
                 highest: vec![3, 4],
