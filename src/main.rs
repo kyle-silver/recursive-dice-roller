@@ -2,6 +2,7 @@
 
 mod eval;
 mod parse;
+mod tokenize;
 
 use parse::parse;
 use rand::rngs::ThreadRng;

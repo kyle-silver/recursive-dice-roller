@@ -92,12 +92,6 @@ pub enum Keep {
     All,
 }
 
-// #[derive(Debug, PartialEq, Eq, Clone)]
-// pub struct Keep {
-//     pub retain: Exp,
-//     pub rule: KeepRule,
-// }
-
 impl Keep {
     fn retain(&self, elements: &[i32], rng: &mut impl Rng) -> Kept {
         // get the number of elements to retain
