@@ -1,4 +1,4 @@
-use crate::eval::{vec_deque, Exp};
+use crate::eval::{self, vec_deque, Exp, KeepRule, Roll};
 use std::{collections::VecDeque, iter::Peekable};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -7,6 +7,9 @@ enum Token {
     Plus,
     Minus,
     Times,
+    Die,
+    KeepHighest,
+    KeepLowest,
     OpenParen,
     CloseParen,
     Expression(Exp),
@@ -47,6 +50,7 @@ impl Token {
                 '-' => {
                     // consume the minus sign
                     chars.next();
+                    // parse the rest of the number
                     if chars.peek().map(char::is_ascii_digit).unwrap_or(false) {
                         let number = Token::parse_number(chars)?;
                         return Ok(Token::Number(-1 * number));
@@ -60,6 +64,27 @@ impl Token {
                 '*' => {
                     chars.next();
                     return Ok(Token::Times);
+                }
+                'd' => {
+                    chars.next();
+                    return Ok(Token::Die);
+                }
+                'k' => {
+                    // consume the 'k'
+                    chars.next();
+                    // figure out which expression is next; we can even allow
+                    // whitespace to follow in case somebody really wants to
+                    // notate it as "2 d 20 k 1", hideous though that may be
+                    return match chars.peek() {
+                        Some('0'..='9' | 'h' | '(' | ' ') => Ok(Token::KeepHighest),
+                        Some('l') => Ok(Token::KeepLowest),
+                        Some(c) => Err(format!(
+                            "Encountered unexpected symbol '{c}' while tokenizing input"
+                        )),
+                        None => Err(
+                            "Character stream completed before token was fully assembled".into(),
+                        ),
+                    };
                 }
                 _ => {
                     let msg = format!("Encountered unexpected symbol '{c}' while tokenizing input");
@@ -161,12 +186,29 @@ impl ExpBuilder {
                 return Some(expression);
             }
             // multiplication rules, including a similar optimization for
-            // repeated applications to the addition rules
+            // repeated applications to the addition rules (TODO)
             [Expression(a), Times, Expression(b)] => {
                 let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
                 return Some(expression);
             }
-
+            // dice rolling rules, including support for 'keep lowest' and 'keep
+            // highest'
+            [Die, Expression(sides)] => {
+                if let Some(KeepLowest | KeepHighest) = self.lookahead {
+                    return None;
+                }
+                let expression = Exp::roll(eval::Roll::new(
+                    Const(1),
+                    sides.clone(),
+                    Const(1),
+                    KeepRule::Highest,
+                ));
+                return Some(expression);
+            }
+            [Expression(dice), Expression(Roll(roll))] => {
+                roll.borrow_mut().dice = dice.clone();
+                return Some(Roll(roll.clone()));
+            }
             _ => None,
         }
     }
@@ -215,7 +257,7 @@ pub fn parse(input: &str) -> Result<Exp, String> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::eval::{vec_deque, Exp};
+    use crate::eval::{vec_deque, Exp, KeepRule, Roll};
     use rand::rngs::ThreadRng;
     use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
@@ -365,6 +407,37 @@ mod tests {
         let parsed = parse("1 - -2")?;
         assert_eq!(Exp::sub(vec_deque![Exp::Const(1), Exp::Const(-2)]), parsed);
         assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
+
+    #[test]
+    fn basic_die_roll() -> Result<(), String> {
+        let parsed = parse("d6")?;
+        // expands to 1d6k1 which looks dumb but is more syntactically complete
+        assert_eq!(
+            Exp::roll(Roll::new(
+                Exp::Const(1),
+                Exp::Const(6),
+                Exp::Const(1),
+                KeepRule::Highest
+            )),
+            parsed
+        );
+        Ok(())
+    }
+    #[test]
+    fn multiple_dice_rolls() -> Result<(), String> {
+        let parsed = parse("3d8")?;
+        // expands to 1d6k1 which looks dumb but is more syntactically complete
+        assert_eq!(
+            Exp::roll(Roll::new(
+                Exp::Const(3),
+                Exp::Const(8),
+                Exp::Const(1),
+                KeepRule::Highest
+            )),
+            parsed
+        );
         Ok(())
     }
 }

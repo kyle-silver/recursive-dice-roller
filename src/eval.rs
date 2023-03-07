@@ -128,12 +128,23 @@ impl Keep {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Roll {
-    dice: Exp,
-    sides: Exp,
-    keep: Keep,
+    pub dice: Exp,
+    pub sides: Exp,
+    pub keep: Keep,
 }
 
 impl Roll {
+    pub fn new(dice: Exp, sides: Exp, keep: Exp, keep_rule: KeepRule) -> Self {
+        Roll {
+            dice,
+            sides,
+            keep: Keep {
+                retain: keep,
+                rule: keep_rule,
+            },
+        }
+    }
+
     fn val(&self, rng: &mut impl Rng) -> Rolled {
         // first we need to evaluate how many sides the die has
         let sides = self.sides.evaluate(rng);
