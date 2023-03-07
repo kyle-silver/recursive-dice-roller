@@ -189,8 +189,6 @@ impl Roll {
         // "highest" buckets; the first step is to sort the list
         rolled.sort_unstable();
 
-        println!("ROLLED: {rolled:?}");
-
         // now we split at the appropriate index
         let kept = self.keep.retain(&rolled, rng);
 

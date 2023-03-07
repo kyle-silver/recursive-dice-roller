@@ -253,7 +253,7 @@ pub fn parse(input: &str) -> Result<Exp, String> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::eval::{vec_deque, Exp, Keep, Roll};
+    use crate::eval::{self, vec_deque, Exp, Keep, Roll};
     use rand::rngs::ThreadRng;
     use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
@@ -436,6 +436,14 @@ mod tests {
         println!("{evaluated:#?}");
         let value = evaluated.value();
         println!("{value}");
+        assert_eq!(
+            Exp::roll(Roll {
+                dice: Exp::roll(Roll::simple(Exp::Const(1), Exp::Const(4))),
+                sides: Exp::roll(Roll::simple(Exp::Const(3), Exp::Const(6))),
+                keep: Keep::All,
+            }),
+            parsed
+        );
         Ok(())
     }
 }
