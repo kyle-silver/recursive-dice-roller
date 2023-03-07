@@ -359,4 +359,12 @@ mod tests {
         assert_eq!(-6, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }
+
+    #[test]
+    fn double_negatives() -> Result<(), String> {
+        let parsed = parse("1 - -2")?;
+        assert_eq!(Exp::sub(vec_deque![Exp::Const(1), Exp::Const(-2)]), parsed);
+        assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
+        Ok(())
+    }
 }
