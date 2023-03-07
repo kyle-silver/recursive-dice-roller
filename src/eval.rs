@@ -85,22 +85,35 @@ impl Default for Exp {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum KeepRule {
-    Lowest,
-    Highest,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Keep {
+    Lowest(Exp),
+    Highest(Exp),
+    All,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Keep {
-    retain: Exp,
-    rule: KeepRule,
-}
+// #[derive(Debug, PartialEq, Eq, Clone)]
+// pub struct Keep {
+//     pub retain: Exp,
+//     pub rule: KeepRule,
+// }
 
 impl Keep {
     fn retain(&self, elements: &[i32], rng: &mut impl Rng) -> Kept {
         // get the number of elements to retain
-        let retained = self.retain.evaluate(rng);
+        // let retained = self.retain.evaluate(rng);
+        let retained = match self {
+            Keep::Lowest(exp) => exp.evaluate(rng),
+            Keep::Highest(exp) => exp.evaluate(rng),
+            Keep::All => {
+                return Kept {
+                    rule: self.clone(),
+                    retained: Value::Const(elements.len() as i32),
+                    lowest: Vec::new(),
+                    highest: elements.to_vec(),
+                }
+            }
+        };
 
         // make sure that we are keeping a legal number of elements. The number
         // must be between zero (inclusive) and the total number of elements
@@ -108,9 +121,9 @@ impl Keep {
         let n = (retained.value().max(0) as usize).min(elements.len());
 
         // calculate the index at which to split the slice
-        let index = match self.rule {
-            KeepRule::Lowest => n,
-            KeepRule::Highest => elements.len() - n,
+        let index = match self {
+            Lowest => n,
+            Highest => elements.len() - n,
         };
 
         // split the slice
@@ -118,7 +131,7 @@ impl Keep {
 
         // return all of this nonsense
         Kept {
-            rule: self.rule,
+            rule: self.clone(),
             retained,
             lowest: lowest.to_vec(),
             highest: highest.to_vec(),
@@ -134,14 +147,11 @@ pub struct Roll {
 }
 
 impl Roll {
-    pub fn new(dice: Exp, sides: Exp, keep: Exp, keep_rule: KeepRule) -> Self {
+    pub fn simple(dice: Exp, sides: Exp) -> Self {
         Roll {
             dice,
             sides,
-            keep: Keep {
-                retain: keep,
-                rule: keep_rule,
-            },
+            keep: Keep::All,
         }
     }
 
@@ -178,6 +188,8 @@ impl Roll {
         // "highest" buckets; the first step is to sort the list
         rolled.sort_unstable();
 
+        println!("ROLLED: {rolled:?}");
+
         // now we split at the appropriate index
         let kept = self.keep.retain(&rolled, rng);
 
@@ -205,7 +217,7 @@ impl Rolled {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Kept {
-    rule: KeepRule,
+    rule: Keep,
     retained: Value,
     lowest: Vec<i32>,
     highest: Vec<i32>,
@@ -213,9 +225,9 @@ pub struct Kept {
 
 impl Kept {
     fn val(&self) -> i32 {
-        let to_sum = match self.rule {
-            KeepRule::Lowest => &self.lowest,
-            KeepRule::Highest => &self.highest,
+        let to_sum = match &self.rule {
+            Keep::Lowest(_) => &self.lowest,
+            _ => &self.highest,
         };
         to_sum.iter().sum()
     }
@@ -306,17 +318,14 @@ mod tests {
         let roll = Roll {
             dice: Exp::Const(1),
             sides: Exp::Const(6),
-            keep: Keep {
-                rule: KeepRule::Highest,
-                retain: Exp::Const(1),
-            },
+            keep: Keep::All,
         };
         let expression = Exp::Roll(Rc::new(RefCell::new(roll)));
         let expected = Value::Rolled(Rolled {
             dice: Box::new(Value::Const(1)),
             sides: Box::new(Value::Const(6)),
             kept: Box::new(Kept {
-                rule: KeepRule::Highest,
+                rule: Keep::All,
                 retained: Value::Const(1),
                 lowest: vec![],
                 highest: vec![3],
@@ -332,16 +341,10 @@ mod tests {
             dice: Exp::roll(Roll {
                 dice: Exp::Const(1),
                 sides: Exp::Const(6),
-                keep: Keep {
-                    retain: Exp::Const(1),
-                    rule: KeepRule::Highest,
-                },
+                keep: Keep::All,
             }),
             sides: Exp::Const(6),
-            keep: Keep {
-                rule: KeepRule::Highest,
-                retain: Exp::Const(2),
-            },
+            keep: Keep::All,
         };
         let expression = Exp::roll(roll);
         let expected = Value::Rolled(Rolled {
@@ -349,7 +352,7 @@ mod tests {
                 dice: Box::new(Value::Const(1)),
                 sides: Box::new(Value::Const(6)),
                 kept: Box::new(Kept {
-                    rule: KeepRule::Highest,
+                    rule: Keep::All,
                     retained: Value::Const(1),
                     lowest: vec![],
                     highest: vec![2],
@@ -357,7 +360,7 @@ mod tests {
             })),
             sides: Box::new(Value::Const(6)),
             kept: Box::new(Kept {
-                rule: KeepRule::Highest,
+                rule: Keep::All,
                 retained: Value::Const(2),
                 lowest: vec![],
                 highest: vec![3, 4],

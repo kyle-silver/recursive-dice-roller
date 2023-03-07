@@ -1,4 +1,4 @@
-use crate::eval::{self, vec_deque, Exp, KeepRule, Roll};
+use crate::eval::{self, vec_deque, Exp};
 use std::{collections::VecDeque, iter::Peekable};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -197,16 +197,12 @@ impl ExpBuilder {
                 if let Some(KeepLowest | KeepHighest) = self.lookahead {
                     return None;
                 }
-                let expression = Exp::roll(eval::Roll::new(
-                    Const(1),
-                    sides.clone(),
-                    Const(1),
-                    KeepRule::Highest,
-                ));
+                let expression = Exp::roll(eval::Roll::simple(Const(1), sides.clone()));
                 return Some(expression);
             }
             [Expression(dice), Expression(Roll(roll))] => {
                 roll.borrow_mut().dice = dice.clone();
+                // roll.borrow_mut().keep.retain = dice.clone();
                 return Some(Roll(roll.clone()));
             }
             _ => None,
@@ -257,7 +253,7 @@ pub fn parse(input: &str) -> Result<Exp, String> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::eval::{vec_deque, Exp, KeepRule, Roll};
+    use crate::eval::{vec_deque, Exp, Keep, Roll};
     use rand::rngs::ThreadRng;
     use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
@@ -415,29 +411,31 @@ mod tests {
         let parsed = parse("d6")?;
         // expands to 1d6k1 which looks dumb but is more syntactically complete
         assert_eq!(
-            Exp::roll(Roll::new(
-                Exp::Const(1),
-                Exp::Const(6),
-                Exp::Const(1),
-                KeepRule::Highest
-            )),
+            Exp::roll(Roll::simple(Exp::Const(1), Exp::Const(6))),
             parsed
         );
         Ok(())
     }
+
     #[test]
     fn multiple_dice_rolls() -> Result<(), String> {
         let parsed = parse("3d8")?;
         // expands to 1d6k1 which looks dumb but is more syntactically complete
         assert_eq!(
-            Exp::roll(Roll::new(
-                Exp::Const(3),
-                Exp::Const(8),
-                Exp::Const(1),
-                KeepRule::Highest
-            )),
+            Exp::roll(Roll::simple(Exp::Const(3), Exp::Const(8),)),
             parsed
         );
+        Ok(())
+    }
+
+    #[test]
+    fn recursive_dice_expression() -> Result<(), String> {
+        let parsed = parse("(d4)d(3d6)")?;
+        println!("{parsed:#?}");
+        let evaluated = parsed.evaluate(&mut ThreadRng::default());
+        println!("{evaluated:#?}");
+        let value = evaluated.value();
+        println!("{value}");
         Ok(())
     }
 }
