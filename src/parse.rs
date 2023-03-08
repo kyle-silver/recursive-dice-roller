@@ -124,7 +124,7 @@ mod tests {
     use super::parse;
     use crate::eval::{vec_deque, Exp, Keep, Roll};
     use rand::rngs::ThreadRng;
-    use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+    use std::collections::VecDeque;
 
     #[test]
     fn numeric_literal() -> Result<(), String> {
