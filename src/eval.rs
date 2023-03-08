@@ -193,7 +193,9 @@ impl Roll {
         }
     }
 
+    #[allow(dead_code)]
     pub fn keep_highest(dice: Exp, sides: Exp, highest: Exp) -> Self {
+        // not actually dead, used by unit tests
         Roll {
             dice,
             sides,
@@ -201,7 +203,9 @@ impl Roll {
         }
     }
 
+    #[allow(dead_code)]
     pub fn keep_lowest(dice: Exp, sides: Exp, lowest: Exp) -> Self {
+        // not actually dead, used by unit tests
         Roll {
             dice,
             sides,

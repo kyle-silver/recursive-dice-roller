@@ -1,8 +1,7 @@
 use crate::{
-    eval::{self, vec_deque, Exp, Keep},
+    eval::{self, Exp, Keep},
     tokenize::{Token, Tokenizer},
 };
-use std::collections::VecDeque;
 
 #[derive(Debug, Default)]
 struct ExpBuilder {
@@ -336,7 +335,7 @@ mod tests {
 
     #[test]
     fn keep_lowest() -> Result<(), String> {
-        let parsed = parse("1 + 1 + 2d20kl1 - 1 - 1")?;
+        let parsed = parse("1 + 1 + 2d20kl1 * 2 - 1 - 1")?;
         println!("{parsed:#?}");
         // assert_eq!(
         //     Exp::roll(Roll::keep_highest(
