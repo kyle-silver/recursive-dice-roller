@@ -1,6 +1,21 @@
 use crate::eval::Exp;
 use std::{iter::Peekable, str::Chars};
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Token {
+    Number(i32),
+    Plus,
+    Minus,
+    Times,
+    Die,
+    KeepHighest,
+    KeepLowest,
+    OpenParen,
+    CloseParen,
+    Expression(Exp),
+    EndOfStream,
+}
+
 /// A streaming tokenizer. When `next()` is called, it will return the next
 /// token if one is present, an error if a token cannot be created, and `None`
 /// when there are no tokens left to extract. Because it's an Iterator, we're
@@ -27,7 +42,7 @@ impl Iterator for Tokenizer<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.chars.peek().is_some() {
-            return Some(Token::next(&mut self.chars));
+            return Some(Self::next_token(&mut self.chars));
         }
         if !self.has_passed_eof {
             self.has_passed_eof = true;
@@ -37,23 +52,8 @@ impl Iterator for Tokenizer<'_> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Token {
-    Number(i32),
-    Plus,
-    Minus,
-    Times,
-    Die,
-    KeepHighest,
-    KeepLowest,
-    OpenParen,
-    CloseParen,
-    Expression(Exp),
-    EndOfStream,
-}
-
-impl Token {
-    pub fn next(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<Token, String> {
+impl Tokenizer<'_> {
+    pub fn next_token(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<Token, String> {
         while let Some(c) = chars.peek() {
             if c.is_whitespace() {
                 chars.next();
@@ -69,7 +69,7 @@ impl Token {
                     return Ok(Token::CloseParen);
                 }
                 '0'..='9' => {
-                    let number = Token::parse_number(chars)?;
+                    let number = Self::parse_number(chars)?;
                     return Ok(Token::Number(number));
                 }
                 '-' => {
@@ -77,7 +77,7 @@ impl Token {
                     chars.next();
                     // parse the rest of the number
                     if chars.peek().map(char::is_ascii_digit).unwrap_or(false) {
-                        let number = Token::parse_number(chars)?;
+                        let number = Self::parse_number(chars)?;
                         return Ok(Token::Number(-1 * number));
                     }
                     return Ok(Token::Minus);
