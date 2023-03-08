@@ -29,6 +29,15 @@ impl ExpBuilder {
             // addition rules, including an optimization where multiple repeated
             // additions are collapsed into a single vector rather than being a
             // very lopsided tree
+            [Expression(Add(augends)), Plus, Expression(Roll(roll))] => {
+                if let Some(KeepHighest | KeepLowest) = self.lookahead {
+                    return None;
+                }
+                let arguments = augends.clone();
+                arguments.borrow_mut().push_back(Exp::Roll(roll.clone()));
+                let expression = Exp::Add(arguments);
+                return Some(expression);
+            }
             [Expression(Add(augends)), Plus, Expression(addend)] => {
                 if let Some(Times | Die) = self.lookahead {
                     return None;
@@ -49,9 +58,6 @@ impl ExpBuilder {
                 // want to reduce if the addition is immediately succeeded by a
                 // multiplication
                 if let Some(Times | Die) = self.lookahead {
-                    return None;
-                }
-                if let (Roll(_), Some(KeepHighest | KeepLowest)) = (&b, &self.lookahead) {
                     return None;
                 }
                 let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
@@ -85,9 +91,6 @@ impl ExpBuilder {
             // repeated applications to the addition rules (TODO)
             [Expression(a), Times, Expression(b)] => {
                 if let Some(Die) = self.lookahead {
-                    return None;
-                }
-                if let (Roll(_), Some(KeepHighest | KeepLowest)) = (&b, &self.lookahead) {
                     return None;
                 }
                 let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
@@ -379,8 +382,8 @@ mod tests {
 
     #[test]
     fn keep_lowest() -> Result<(), String> {
-        // let parsed = parse("1 + 3 + 2d20kl1 - 1")?;
-        // println!("{parsed:#?}");
+        let parsed = parse("1 + 1 + 2d20kl1 - 1 - 1")?;
+        println!("{parsed:#?}");
         // assert_eq!(
         //     Exp::roll(Roll::keep_highest(
         //         Exp::Const(2),
