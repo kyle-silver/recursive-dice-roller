@@ -1,6 +1,6 @@
 use crate::{
     eval::{self, vec_deque, Exp},
-    tokenize::Token,
+    tokenize::{Token, Tokenizer},
 };
 use std::collections::VecDeque;
 
@@ -126,11 +126,10 @@ impl ExpBuilder {
 }
 
 pub fn parse(input: &str) -> Result<Exp, String> {
-    let tokenized = Token::tokenize(input)?;
-    let tokens = tokenized.into_iter();
+    let tokens = Tokenizer::new(input);
     let mut exp_builder = ExpBuilder::default();
     for token in tokens {
-        exp_builder.push(token);
+        exp_builder.push(token?);
         while exp_builder.reduce() {}
     }
     return exp_builder.build();
@@ -139,7 +138,7 @@ pub fn parse(input: &str) -> Result<Exp, String> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::eval::{self, vec_deque, Exp, Keep, Roll};
+    use crate::eval::{vec_deque, Exp, Keep, Roll};
     use rand::rngs::ThreadRng;
     use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
