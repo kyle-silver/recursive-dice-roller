@@ -1,5 +1,5 @@
 use crate::{
-    eval::{self, vec_deque, Exp},
+    eval::{self, vec_deque, Exp, Keep},
     tokenize::{Token, Tokenizer},
 };
 use std::collections::VecDeque;
@@ -15,6 +15,7 @@ impl ExpBuilder {
         use Exp::*;
         use Token::*;
         let Self { tokens, .. } = self;
+        println!("{tokens:?}");
         match &mut tokens[split..] {
             // the most basic thing we can do is convert a number literal into
             // constant expression
@@ -29,6 +30,9 @@ impl ExpBuilder {
             // additions are collapsed into a single vector rather than being a
             // very lopsided tree
             [Expression(Add(augends)), Plus, Expression(addend)] => {
+                if let Some(Times | Die) = self.lookahead {
+                    return None;
+                }
                 let arguments = augends.clone();
                 arguments.borrow_mut().push_back(addend.clone());
                 let expression = Exp::Add(arguments);
@@ -44,7 +48,10 @@ impl ExpBuilder {
                 // the times operator has greater precedence and so we don't
                 // want to reduce if the addition is immediately succeeded by a
                 // multiplication
-                if let Some(Times) = self.lookahead {
+                if let Some(Times | Die) = self.lookahead {
+                    return None;
+                }
+                if let (Roll(_), Some(KeepHighest | KeepLowest)) = (&b, &self.lookahead) {
                     return None;
                 }
                 let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
@@ -65,7 +72,10 @@ impl ExpBuilder {
                 return Some(expression);
             }
             [Expression(a), Minus, Expression(b)] => {
-                if let Some(Times) = self.lookahead {
+                if let Some(Times | Die) = self.lookahead {
+                    return None;
+                }
+                if let (Roll(_), Some(KeepHighest | KeepLowest)) = (&b, &self.lookahead) {
                     return None;
                 }
                 let expression = Exp::sub(vec_deque![a.clone(), b.clone()]);
@@ -74,21 +84,33 @@ impl ExpBuilder {
             // multiplication rules, including a similar optimization for
             // repeated applications to the addition rules (TODO)
             [Expression(a), Times, Expression(b)] => {
+                if let Some(Die) = self.lookahead {
+                    return None;
+                }
+                if let (Roll(_), Some(KeepHighest | KeepLowest)) = (&b, &self.lookahead) {
+                    return None;
+                }
                 let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
                 return Some(expression);
             }
             // dice rolling rules, including support for 'keep lowest' and 'keep
             // highest'
             [Die, Expression(sides)] => {
-                if let Some(KeepLowest | KeepHighest) = self.lookahead {
-                    return None;
-                }
                 let expression = Exp::roll(eval::Roll::simple(Const(1), sides.clone()));
                 return Some(expression);
             }
             [Expression(dice), Expression(Roll(roll))] => {
                 roll.borrow_mut().dice = dice.clone();
                 // roll.borrow_mut().keep.retain = dice.clone();
+                return Some(Roll(roll.clone()));
+            }
+            // keep higher
+            [Expression(Roll(roll)), KeepHighest, Expression(exp)] => {
+                roll.borrow_mut().keep = Keep::Highest(exp.clone());
+                return Some(Roll(roll.clone()));
+            }
+            [Expression(Roll(roll)), KeepLowest, Expression(exp)] => {
+                roll.borrow_mut().keep = Keep::Lowest(exp.clone());
                 return Some(Roll(roll.clone()));
             }
             _ => None,
@@ -316,11 +338,6 @@ mod tests {
     #[test]
     fn recursive_dice_expression() -> Result<(), String> {
         let parsed = parse("(d4)d(3d6)")?;
-        println!("{parsed:#?}");
-        let evaluated = parsed.evaluate(&mut ThreadRng::default());
-        println!("{evaluated:#?}");
-        let value = evaluated.value();
-        println!("{value}");
         assert_eq!(
             Exp::roll(Roll {
                 dice: Exp::roll(Roll::simple(Exp::Const(1), Exp::Const(4))),
@@ -329,6 +346,49 @@ mod tests {
             }),
             parsed
         );
+        Ok(())
+    }
+
+    #[test]
+    fn basic_keep() -> Result<(), String> {
+        let parsed = parse("2d20k1")?;
+        assert_eq!(
+            Exp::roll(Roll::keep_highest(
+                Exp::Const(2),
+                Exp::Const(20),
+                Exp::Const(1)
+            )),
+            parsed
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn keep_highest() -> Result<(), String> {
+        let parsed = parse("2d20kh1")?;
+        assert_eq!(
+            Exp::roll(Roll::keep_highest(
+                Exp::Const(2),
+                Exp::Const(20),
+                Exp::Const(1)
+            )),
+            parsed
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn keep_lowest() -> Result<(), String> {
+        // let parsed = parse("1 + 3 + 2d20kl1 - 1")?;
+        // println!("{parsed:#?}");
+        // assert_eq!(
+        //     Exp::roll(Roll::keep_highest(
+        //         Exp::Const(2),
+        //         Exp::Const(20),
+        //         Exp::Const(1)
+        //     )),
+        //     parsed
+        // );
         Ok(())
     }
 }

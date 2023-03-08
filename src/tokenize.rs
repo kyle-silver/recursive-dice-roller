@@ -101,8 +101,15 @@ impl Tokenizer<'_> {
                     // whitespace to follow in case somebody really wants to
                     // notate it as "2 d 20 k 1", hideous though that may be
                     return match chars.peek() {
-                        Some('0'..='9' | 'h' | '(' | ' ') => Ok(Token::KeepHighest),
-                        Some('l') => Ok(Token::KeepLowest),
+                        Some('0'..='9') => Ok(Token::KeepHighest),
+                        Some('h') => {
+                            chars.next();
+                            Ok(Token::KeepHighest)
+                        }
+                        Some('l') => {
+                            chars.next();
+                            Ok(Token::KeepLowest)
+                        }
                         Some(c) => Err(format!(
                             "Encountered unexpected symbol '{c}' while tokenizing input"
                         )),

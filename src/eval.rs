@@ -150,6 +150,22 @@ impl Roll {
         }
     }
 
+    pub fn keep_highest(dice: Exp, sides: Exp, highest: Exp) -> Self {
+        Roll {
+            dice,
+            sides,
+            keep: Keep::Highest(highest),
+        }
+    }
+
+    pub fn keep_lowest(dice: Exp, sides: Exp, lowest: Exp) -> Self {
+        Roll {
+            dice,
+            sides,
+            keep: Keep::Lowest(lowest),
+        }
+    }
+
     fn val(&self, rng: &mut impl Rng) -> Rolled {
         // first we need to evaluate how many sides the die has
         let sides = self.sides.evaluate(rng);
