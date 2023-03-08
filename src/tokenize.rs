@@ -1,12 +1,10 @@
-use crate::eval::Exp;
+use crate::eval::{Exp, Operation};
 use std::{iter::Peekable, str::Chars};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     Number(i32),
-    Plus,
-    Minus,
-    Times,
+    Operation(Operation),
     Die,
     KeepHighest,
     KeepLowest,
@@ -14,6 +12,17 @@ pub enum Token {
     CloseParen,
     Expression(Exp),
     EndOfStream,
+}
+
+impl Token {
+    pub fn precedence(&self) -> u32 {
+        match self {
+            Token::Operation(op) => op.precedence(),
+            Token::Die => 10,
+            Token::KeepHighest | Token::KeepLowest => 20,
+            _ => 0,
+        }
+    }
 }
 
 /// A streaming tokenizer. When `next()` is called, it will return the next
@@ -80,15 +89,15 @@ impl Tokenizer<'_> {
                         let number = Self::parse_number(chars)?;
                         return Ok(Token::Number(-1 * number));
                     }
-                    return Ok(Token::Minus);
+                    return Ok(Token::Operation(Operation::Sub));
                 }
                 '+' => {
                     chars.next();
-                    return Ok(Token::Plus);
+                    return Ok(Token::Operation(Operation::Add));
                 }
                 '*' => {
                     chars.next();
-                    return Ok(Token::Times);
+                    return Ok(Token::Operation(Operation::Mul));
                 }
                 'd' => {
                     chars.next();

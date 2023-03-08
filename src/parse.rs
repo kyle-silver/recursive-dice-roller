@@ -14,9 +14,8 @@ impl ExpBuilder {
     fn reduced(&mut self, split: usize) -> Option<Exp> {
         use Exp::*;
         use Token::*;
-        let Self { tokens, .. } = self;
-        println!("{tokens:?}");
-        match &mut tokens[split..] {
+        println!("{:?}", self.tokens);
+        match &mut self.tokens[split..] {
             // the most basic thing we can do is convert a number literal into
             // constant expression
             [Number(n)] => {
@@ -26,74 +25,35 @@ impl ExpBuilder {
             [OpenParen, Expression(exp), CloseParen] => {
                 return Some(exp.clone());
             }
-            // addition rules, including an optimization where multiple repeated
-            // additions are collapsed into a single vector rather than being a
-            // very lopsided tree
-            [Expression(Add(augends)), Plus, Expression(Roll(roll))] => {
-                if let Some(KeepHighest | KeepLowest) = self.lookahead {
+            [Expression(lhs), Operation(op), Expression(Op(rhs))] => {
+                if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
                 }
-                let arguments = augends.clone();
-                arguments.borrow_mut().push_back(Exp::Roll(roll.clone()));
-                let expression = Exp::Add(arguments);
+                if *op == rhs.operation {
+                    rhs.push_front(lhs.clone());
+                    return Some(Exp::Op(rhs.clone()));
+                }
+                let expression = op.to_exp(lhs.clone(), Exp::Op(rhs.clone()));
                 return Some(expression);
             }
-            [Expression(Add(augends)), Plus, Expression(addend)] => {
-                if let Some(Times | Die) = self.lookahead {
+            [Expression(Op(lhs)), Operation(op), Expression(rhs)] => {
+                if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
                 }
-                let arguments = augends.clone();
-                arguments.borrow_mut().push_back(addend.clone());
-                let expression = Exp::Add(arguments);
+                if lhs.operation == *op {
+                    lhs.push_back(rhs.clone());
+                    return Some(Exp::Op(lhs.clone()));
+                }
+                let expression = op.to_exp(Exp::Op(lhs.clone()), rhs.clone());
                 return Some(expression);
             }
-            [Expression(augend), Plus, Expression(Add(addends))] => {
-                let arguments = addends.clone();
-                arguments.borrow_mut().push_front(augend.clone());
-                let expression = Exp::Add(arguments);
-                return Some(expression);
-            }
-            [Expression(a), Plus, Expression(b)] => {
-                // the times operator has greater precedence and so we don't
-                // want to reduce if the addition is immediately succeeded by a
-                // multiplication
-                if let Some(Times | Die) = self.lookahead {
+            [Expression(a), Operation(op), Expression(b)] => {
+                // if the lookahead token has greater precedence than our
+                // current operator, we don't want to reduce the expression yet
+                if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
                 }
-                let expression = Exp::add(vec_deque![a.clone(), b.clone()]);
-                return Some(expression);
-            }
-            // subtraction rules; largely analogous to the addition rules,
-            // although I'm not sure that I would want to combine them.
-            [Expression(Sub(subtrahends)), Minus, Expression(minuend)] => {
-                let arguments = subtrahends.clone();
-                arguments.borrow_mut().push_back(minuend.clone());
-                let expression = Exp::Sub(arguments);
-                return Some(expression);
-            }
-            [Expression(subtrahend), Minus, Expression(Add(minuend))] => {
-                let arguments = minuend.clone();
-                arguments.borrow_mut().push_front(subtrahend.clone());
-                let expression = Exp::Sub(arguments);
-                return Some(expression);
-            }
-            [Expression(a), Minus, Expression(b)] => {
-                if let Some(Times | Die) = self.lookahead {
-                    return None;
-                }
-                if let (Roll(_), Some(KeepHighest | KeepLowest)) = (&b, &self.lookahead) {
-                    return None;
-                }
-                let expression = Exp::sub(vec_deque![a.clone(), b.clone()]);
-                return Some(expression);
-            }
-            // multiplication rules, including a similar optimization for
-            // repeated applications to the addition rules (TODO)
-            [Expression(a), Times, Expression(b)] => {
-                if let Some(Die) = self.lookahead {
-                    return None;
-                }
-                let expression = Exp::mul(vec_deque![a.clone(), b.clone()]);
+                let expression = op.to_exp(a.clone(), b.clone());
                 return Some(expression);
             }
             // dice rolling rules, including support for 'keep lowest' and 'keep
@@ -184,13 +144,7 @@ mod tests {
     #[test]
     fn one_plus_two_equals_three() -> Result<(), String> {
         let parsed = parse("1 + 2")?;
-        assert_eq!(
-            Exp::Add(Rc::new(RefCell::new(vec_deque![
-                Exp::Const(1),
-                Exp::Const(2)
-            ]))),
-            parsed
-        );
+        assert_eq!(Exp::add(vec_deque![Exp::Const(1), Exp::Const(2)]), parsed);
         assert_eq!(3, parsed.evaluate(&mut ThreadRng::default()).value());
         Ok(())
     }

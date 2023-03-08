@@ -20,13 +20,70 @@ macro_rules! vec_deque {
 pub(crate) use vec_deque;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Operation {
+    Add,
+    Sub,
+    Mul,
+}
+
+impl Operation {
+    pub fn to_exp(&self, lhs: Exp, rhs: Exp) -> Exp {
+        let args = vec_deque![lhs, rhs];
+        match self {
+            Operation::Add => Exp::add(args),
+            Operation::Sub => Exp::sub(args),
+            Operation::Mul => Exp::mul(args),
+        }
+    }
+
+    pub fn precedence(&self) -> u32 {
+        match self {
+            Operation::Add => 1,
+            Operation::Sub => 1,
+            Operation::Mul => 2,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Op {
+    pub operation: Operation,
+    pub arguments: Rc<RefCell<VecDeque<Exp>>>,
+}
+
+impl Op {
+    pub fn push_front(&mut self, exp: Exp) {
+        self.arguments.borrow_mut().push_front(exp);
+    }
+
+    pub fn push_back(&mut self, exp: Exp) {
+        self.arguments.borrow_mut().push_back(exp);
+    }
+
+    fn value(&self, rng: &mut impl Rng) -> Value {
+        let values = self
+            .arguments
+            .borrow()
+            .iter()
+            .map(|subexpression| subexpression.evaluate(rng))
+            .collect();
+        match &self.operation {
+            Operation::Add => Value::Add(values),
+            Operation::Sub => Value::Sub(values),
+            Operation::Mul => Value::Mul(values),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Exp {
     Unit,
     Const(i32),
     Roll(Rc<RefCell<Roll>>),
-    Add(Rc<RefCell<VecDeque<Exp>>>),
-    Sub(Rc<RefCell<VecDeque<Exp>>>),
-    Mul(Rc<RefCell<VecDeque<Exp>>>),
+    // Add(Rc<RefCell<VecDeque<Exp>>>),
+    // Sub(Rc<RefCell<VecDeque<Exp>>>),
+    // Mul(Rc<RefCell<VecDeque<Exp>>>),
+    Op(Op),
 }
 
 impl Exp {
@@ -35,15 +92,24 @@ impl Exp {
     }
 
     pub fn add(vec: VecDeque<Exp>) -> Exp {
-        Exp::Add(Rc::new(RefCell::new(vec)))
+        Exp::Op(Op {
+            operation: Operation::Add,
+            arguments: Rc::new(RefCell::new(vec)),
+        })
     }
 
     pub fn sub(vec: VecDeque<Exp>) -> Exp {
-        Exp::Sub(Rc::new(RefCell::new(vec)))
+        Exp::Op(Op {
+            operation: Operation::Sub,
+            arguments: Rc::new(RefCell::new(vec)),
+        })
     }
 
     pub fn mul(vec: VecDeque<Exp>) -> Exp {
-        Exp::Mul(Rc::new(RefCell::new(vec)))
+        Exp::Op(Op {
+            operation: Operation::Mul,
+            arguments: Rc::new(RefCell::new(vec)),
+        })
     }
 
     pub fn evaluate(&self, rng: &mut impl Rng) -> Value {
@@ -51,30 +117,7 @@ impl Exp {
             Exp::Unit => Value::Unit,
             Exp::Const(value) => Value::Const(*value),
             Exp::Roll(roll) => Value::Rolled(roll.borrow().val(rng)),
-            Exp::Add(subexpressions) => {
-                let values = subexpressions
-                    .borrow()
-                    .iter()
-                    .map(|subexpression| subexpression.evaluate(rng))
-                    .collect();
-                Value::Add(values)
-            }
-            Exp::Sub(subexpressions) => {
-                let values = subexpressions
-                    .borrow()
-                    .iter()
-                    .map(|subexpression| subexpression.evaluate(rng))
-                    .collect();
-                Value::Sub(values)
-            }
-            Exp::Mul(subexpressions) => {
-                let values = subexpressions
-                    .borrow()
-                    .iter()
-                    .map(|subexpression| subexpression.evaluate(rng))
-                    .collect();
-                Value::Mul(values)
-            }
+            Exp::Op(op) => op.value(rng),
         }
     }
 }
