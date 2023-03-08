@@ -1,21 +1,12 @@
 use crate::eval::Exp;
 use std::{iter::Peekable, str::Chars};
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Token {
-    Number(i32),
-    Plus,
-    Minus,
-    Times,
-    Die,
-    KeepHighest,
-    KeepLowest,
-    OpenParen,
-    CloseParen,
-    Expression(Exp),
-    EndOfStream,
-}
-
+/// A streaming tokenizer. When `next()` is called, it will return the next
+/// token if one is present, an error if a token cannot be created, and `None`
+/// when there are no tokens left to extract. Because it's an Iterator, we're
+/// able to begin returning tokens before we have consumed the entire input
+/// stream. This means that we never have to store all of the tokens in memory,
+/// and can jump immediately into building the abstract syntax tree.
 pub struct Tokenizer<'a> {
     chars: Peekable<Chars<'a>>,
     has_passed_eof: bool,
@@ -44,6 +35,21 @@ impl Iterator for Tokenizer<'_> {
         }
         None
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Token {
+    Number(i32),
+    Plus,
+    Minus,
+    Times,
+    Die,
+    KeepHighest,
+    KeepLowest,
+    OpenParen,
+    CloseParen,
+    Expression(Exp),
+    EndOfStream,
 }
 
 impl Token {
