@@ -25,18 +25,27 @@ impl ExpBuilder {
                 return Some(exp.clone());
             }
             // As an optimization, we try to collapse multiple contiguous
-            // applications of the
+            // applications of the same operation into a single vector
             [Expression(Op(lhs)), Operation(op), Expression(rhs)] => {
+                // if the lookahead token has greater precedence than our
+                // current operator, we don't want to reduce the expression yet
                 if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
                 }
+                // if the lhs operation is the same as the new operation we're
+                // evaluating, then we can just add the rhs to the existing
+                // vector
                 if lhs.operation == *op {
                     lhs.push_back(rhs.clone());
                     return Some(Exp::Op(lhs.clone()));
                 }
+                // if we can't perform the optimization, just treat it as a
+                // normal case.
                 let expression = op.to_exp(Exp::Op(lhs.clone()), rhs.clone());
                 return Some(expression);
             }
+            // the optimization is symmetric, so we need to implement it for
+            // both the left-handed version as well as the right-handed version
             [Expression(lhs), Operation(op), Expression(Op(rhs))] => {
                 if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
@@ -48,31 +57,32 @@ impl ExpBuilder {
                 let expression = op.to_exp(lhs.clone(), Exp::Op(rhs.clone()));
                 return Some(expression);
             }
+            // for all other additions not eligible for the optimization; this
+            // is the base case
             [Expression(a), Operation(op), Expression(b)] => {
-                // if the lookahead token has greater precedence than our
-                // current operator, we don't want to reduce the expression yet
                 if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
                 }
                 let expression = op.to_exp(a.clone(), b.clone());
                 return Some(expression);
             }
-            // dice rolling rules, including support for 'keep lowest' and 'keep
-            // highest'
+            // basic dice roll, like d6 or d20
             [Die, Expression(sides)] => {
                 let expression = Exp::roll(eval::Roll::simple(Const(1), sides.clone()));
                 return Some(expression);
             }
+            // rolling multiple of the same die, e.g. 3d8
             [Expression(dice), Expression(Roll(roll))] => {
                 roll.borrow_mut().dice = dice.clone();
                 // roll.borrow_mut().keep.retain = dice.clone();
                 return Some(Roll(roll.clone()));
             }
-            // keep higher
+            // keep highest
             [Expression(Roll(roll)), KeepHighest, Expression(exp)] => {
                 roll.borrow_mut().keep = Keep::Highest(exp.clone());
                 return Some(Roll(roll.clone()));
             }
+            // keep lowest
             [Expression(Roll(roll)), KeepLowest, Expression(exp)] => {
                 roll.borrow_mut().keep = Keep::Lowest(exp.clone());
                 return Some(Roll(roll.clone()));
