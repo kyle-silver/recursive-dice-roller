@@ -4,17 +4,45 @@ mod eval;
 mod parse;
 mod tokenize;
 
+use clap::{Arg, ArgAction, Command};
 use parse::parse;
 use rand::rngs::ThreadRng;
 
 fn main() -> Result<(), String> {
-    // let parsed = parse("1 + 2 * ((d4)d(3d6) - 4) - 5")?;
-    let parsed = parse("d10")?;
-    // let parsed = parse("d(4d5)")?;
-    println!("{parsed:#?}");
+    let matches = Command::new("rdr")
+        .version("0.1.0")
+        .author("Kyle Silver")
+        .about("Roll dice expressions with support for recursive statements")
+        .long_about(
+            "Mathematical expressions, including dice rolling notation and recursion. For\n\
+            example, the expression (3d4)d8 will roll 3d4 eight-sided dice and sum the\n\
+            result. Addition, subtraction, and multiplication are supported as well as\n\
+            parenthesis. Anywhere you can put a number, you can substitute a dice roll,\n\
+            such as (3d2 + 1)d(2d4)kl(2 * 1d4). The recursion can go arbitrarily deep.",
+        )
+        .arg(Arg::new("expression").help("A dice expression"))
+        .arg(
+            Arg::new("quiet")
+                .short('q')
+                .long("quiet")
+                .help("Only output the final result")
+                .action(ArgAction::SetTrue),
+        )
+        .get_matches();
+
+    let quiet = matches.get_flag("quiet");
+
+    let expression: &str = matches
+        .get_one::<String>("expression")
+        .ok_or("No dice roll expression was provided".to_string())?;
+
+    let parsed = parse(expression)?;
     let evaluated = parsed.evaluate(&mut ThreadRng::default());
-    println!("{evaluated:#?}");
     let value = evaluated.value();
+
+    if !quiet {
+        println!("{evaluated:?}");
+    }
     println!("{value}");
     Ok(())
 }

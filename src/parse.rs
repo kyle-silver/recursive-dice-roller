@@ -13,7 +13,6 @@ impl ExpBuilder {
     fn reduced(&mut self, split: usize) -> Option<Exp> {
         use Exp::*;
         use Token::*;
-        println!("{:?}", self.tokens);
         match &mut self.tokens[split..] {
             // the most basic thing we can do is convert a number literal into
             // constant expression
@@ -362,7 +361,6 @@ mod tests {
     #[test]
     fn oh_god_why() -> Result<(), String> {
         let parsed = parse("1 + 2 + 3d(4d10 + 2)kl1 * 5 - 6 - 7")?;
-        println!("{parsed:#?}");
         assert_eq!(
             Exp::sub(vec_deque![
                 Exp::add(vec_deque![
