@@ -24,17 +24,8 @@ impl ExpBuilder {
             [OpenParen, Expression(exp), CloseParen] => {
                 return Some(exp.clone());
             }
-            [Expression(lhs), Operation(op), Expression(Op(rhs))] => {
-                if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
-                    return None;
-                }
-                if *op == rhs.operation {
-                    rhs.push_front(lhs.clone());
-                    return Some(Exp::Op(rhs.clone()));
-                }
-                let expression = op.to_exp(lhs.clone(), Exp::Op(rhs.clone()));
-                return Some(expression);
-            }
+            // As an optimization, we try to collapse multiple contiguous
+            // applications of the
             [Expression(Op(lhs)), Operation(op), Expression(rhs)] => {
                 if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
                     return None;
@@ -44,6 +35,17 @@ impl ExpBuilder {
                     return Some(Exp::Op(lhs.clone()));
                 }
                 let expression = op.to_exp(Exp::Op(lhs.clone()), rhs.clone());
+                return Some(expression);
+            }
+            [Expression(lhs), Operation(op), Expression(Op(rhs))] => {
+                if op.precedence() < self.lookahead.as_ref().map_or(0, Token::precedence) {
+                    return None;
+                }
+                if *op == rhs.operation {
+                    rhs.push_front(lhs.clone());
+                    return Some(Exp::Op(rhs.clone()));
+                }
+                let expression = op.to_exp(lhs.clone(), Exp::Op(rhs.clone()));
                 return Some(expression);
             }
             [Expression(a), Operation(op), Expression(b)] => {
@@ -335,16 +337,44 @@ mod tests {
 
     #[test]
     fn keep_lowest() -> Result<(), String> {
-        let parsed = parse("1 + 1 + 2d20kl1 * 2 - 1 - 1")?;
+        let parsed = parse("2d20kl1")?;
+        assert_eq!(
+            Exp::roll(Roll::keep_lowest(
+                Exp::Const(2),
+                Exp::Const(20),
+                Exp::Const(1)
+            )),
+            parsed
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn oh_god_why() -> Result<(), String> {
+        let parsed = parse("1 + 2 + 3d(4d10 + 2)kl1 * 5 - 6 - 7")?;
         println!("{parsed:#?}");
-        // assert_eq!(
-        //     Exp::roll(Roll::keep_highest(
-        //         Exp::Const(2),
-        //         Exp::Const(20),
-        //         Exp::Const(1)
-        //     )),
-        //     parsed
-        // );
+        assert_eq!(
+            Exp::sub(vec_deque![
+                Exp::add(vec_deque![
+                    Exp::Const(1),
+                    Exp::Const(2),
+                    Exp::mul(vec_deque![
+                        Exp::roll(Roll::keep_lowest(
+                            Exp::Const(3),
+                            Exp::add(vec_deque![
+                                Exp::roll(Roll::simple(Exp::Const(4), Exp::Const(10))),
+                                Exp::Const(2)
+                            ]),
+                            Exp::Const(1)
+                        )),
+                        Exp::Const(5)
+                    ])
+                ]),
+                Exp::Const(6),
+                Exp::Const(7)
+            ]),
+            parsed
+        );
         Ok(())
     }
 }

@@ -8,7 +8,8 @@ use parse::parse;
 use rand::rngs::ThreadRng;
 
 fn main() -> Result<(), String> {
-    let parsed = parse("1 + 2 * ((d4)d(3d6) - 4) - 5")?;
+    // let parsed = parse("1 + 2 * ((d4)d(3d6) - 4) - 5")?;
+    let parsed = parse("d10")?;
     // let parsed = parse("d(4d5)")?;
     println!("{parsed:#?}");
     let evaluated = parsed.evaluate(&mut ThreadRng::default());
