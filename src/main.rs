@@ -2,6 +2,7 @@
 
 mod eval;
 mod parse;
+mod render;
 mod tokenize;
 
 use clap::{Arg, ArgAction, Command};
@@ -43,6 +44,7 @@ fn main() -> Result<(), String> {
     if !quiet {
         println!("{evaluated:?}");
     }
+    render::no_color(&evaluated, 0, true);
     println!("{value}");
     Ok(())
 }

@@ -1,5 +1,6 @@
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, fmt::Display, rc::Rc};
 
+use itertools::Itertools;
 use rand::Rng;
 
 macro_rules! vec_deque {
@@ -67,10 +68,9 @@ impl Op {
             .iter()
             .map(|subexpression| subexpression.evaluate(rng))
             .collect();
-        match &self.operation {
-            Operation::Add => Value::Add(values),
-            Operation::Sub => Value::Sub(values),
-            Operation::Mul => Value::Mul(values),
+        Value::Op {
+            op: self.operation.clone(),
+            values,
         }
     }
 }
@@ -80,9 +80,6 @@ pub enum Exp {
     Unit,
     Const(i32),
     Roll(Rc<RefCell<Roll>>),
-    // Add(Rc<RefCell<VecDeque<Exp>>>),
-    // Sub(Rc<RefCell<VecDeque<Exp>>>),
-    // Mul(Rc<RefCell<VecDeque<Exp>>>),
     Op(Op),
 }
 
@@ -144,7 +141,7 @@ impl Keep {
             Keep::Highest(exp) => exp.evaluate(rng),
             Keep::All => {
                 return Kept {
-                    keep: self.clone(),
+                    keep: KeptRule::All,
                     retained: Value::Const(elements.len() as i32),
                     lowest: Vec::new(),
                     highest: elements.to_vec(),
@@ -168,8 +165,13 @@ impl Keep {
         let (lowest, highest) = elements.split_at(index);
 
         // return all of this nonsense
+        let n = Value::Const(n as i32);
         Kept {
-            keep: self.clone(),
+            keep: match &self {
+                Keep::Lowest(_) => KeptRule::Lowest(n),
+                Keep::Highest(_) => KeptRule::Highest(n),
+                Keep::All => unreachable!("variant was handled earlier"),
+            },
             retained,
             lowest: lowest.to_vec(),
             highest: highest.to_vec(),
@@ -260,9 +262,9 @@ impl Roll {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Rolled {
-    dice: Box<Value>,
-    sides: Box<Value>,
-    kept: Box<Kept>,
+    pub dice: Box<Value>,
+    pub sides: Box<Value>,
+    pub kept: Box<Kept>,
 }
 
 impl Rolled {
@@ -272,17 +274,24 @@ impl Rolled {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum KeptRule {
+    All,
+    Lowest(Value),
+    Highest(Value),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Kept {
-    keep: Keep,
-    retained: Value,
-    lowest: Vec<i32>,
-    highest: Vec<i32>,
+    pub keep: KeptRule,
+    pub retained: Value,
+    pub lowest: Vec<i32>,
+    pub highest: Vec<i32>,
 }
 
 impl Kept {
-    fn val(&self) -> i32 {
+    pub fn val(&self) -> i32 {
         let to_sum = match &self.keep {
-            Keep::Lowest(_) => &self.lowest,
+            KeptRule::Lowest(_) => &self.lowest,
             _ => &self.highest,
         };
         to_sum.iter().sum()
@@ -294,9 +303,7 @@ pub enum Value {
     Unit,
     Const(i32),
     Rolled(Rolled),
-    Add(Vec<Value>),
-    Sub(Vec<Value>),
-    Mul(Vec<Value>),
+    Op { op: Operation, values: Vec<Value> },
 }
 
 impl Value {
@@ -305,19 +312,55 @@ impl Value {
             Value::Unit => 0,
             Value::Const(val) => *val,
             Value::Rolled(rolled) => rolled.val(),
-            Value::Add(values) => values.iter().map(Value::value).sum(),
-            Value::Sub(values) => {
-                let mut values = values.iter();
-                let mut acc = values
-                    .next()
-                    .expect("values is guaranteed to have at least one element")
-                    .value();
-                for value in values {
-                    acc -= value.value();
+            Value::Op { op, values } => match op {
+                Operation::Add => values.iter().map(Value::value).sum(),
+                Operation::Sub => {
+                    let mut values = values.iter();
+                    let mut acc = values
+                        .next()
+                        .expect("values is guaranteed to have at least one element")
+                        .value();
+                    for value in values {
+                        acc -= value.value();
+                    }
+                    acc
                 }
-                return acc;
+                Operation::Mul => values.iter().map(Value::value).product(),
+            },
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Value::Unit => write!(f, ""),
+            Value::Const(c) => write!(f, "{c}"),
+            Value::Rolled(Rolled { dice, sides, kept }) => match &kept.keep {
+                KeptRule::All => {
+                    write!(f, "{}d{}", dice.value(), sides.value())
+                }
+                KeptRule::Lowest(lowest) => {
+                    write!(f, "{}d{}kl{}", dice.value(), sides.value(), lowest.value())
+                }
+                KeptRule::Highest(highest) => {
+                    write!(f, "{}d{}k{}", dice.value(), sides.value(), highest.value())
+                }
+            },
+            Value::Op { op, values } => {
+                let operator = match op {
+                    Operation::Add => " + ",
+                    Operation::Sub => " - ",
+                    Operation::Mul => " * ",
+                };
+                #[allow(unstable_name_collisions)]
+                let value: String = values
+                    .iter()
+                    .map(Value::to_string)
+                    .intersperse(operator.to_string())
+                    .collect();
+                write!(f, "{value}")
             }
-            Value::Mul(values) => values.iter().map(Value::value).product(),
         }
     }
 }
@@ -381,7 +424,7 @@ mod tests {
             dice: Box::new(Value::Const(1)),
             sides: Box::new(Value::Const(6)),
             kept: Box::new(Kept {
-                keep: Keep::All,
+                keep: KeptRule::All,
                 retained: Value::Const(1),
                 lowest: vec![],
                 highest: vec![3],
@@ -408,7 +451,7 @@ mod tests {
                 dice: Box::new(Value::Const(1)),
                 sides: Box::new(Value::Const(6)),
                 kept: Box::new(Kept {
-                    keep: Keep::All,
+                    keep: KeptRule::All,
                     retained: Value::Const(1),
                     lowest: vec![],
                     highest: vec![2],
@@ -416,7 +459,7 @@ mod tests {
             })),
             sides: Box::new(Value::Const(6)),
             kept: Box::new(Kept {
-                keep: Keep::All,
+                keep: KeptRule::All,
                 retained: Value::Const(2),
                 lowest: vec![],
                 highest: vec![3, 4],

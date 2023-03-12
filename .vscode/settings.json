@@ -2,6 +2,7 @@
     "editor.formatOnSave": true,
     "cSpell.words": [
         "Deque",
+        "Itertools",
         "mockrng",
         "Peekable",
         "rngs",
