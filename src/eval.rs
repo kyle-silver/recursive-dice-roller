@@ -336,6 +336,14 @@ impl Value {
             _ => 100,
         }
     }
+
+    pub fn render(&self, needs_parens: bool) -> String {
+        if needs_parens {
+            format!("({self})")
+        } else {
+            self.to_string()
+        }
+    }
 }
 
 impl Display for Value {
@@ -363,7 +371,10 @@ impl Display for Value {
                 #[allow(unstable_name_collisions)]
                 let value: String = values
                     .iter()
-                    .map(Value::to_string)
+                    .map(|v| {
+                        let needs_parens = v.precedence() < self.precedence();
+                        v.render(needs_parens)
+                    })
                     .intersperse(operator.to_string())
                     .collect();
                 write!(f, "{value}")
