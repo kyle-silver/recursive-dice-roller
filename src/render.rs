@@ -2,7 +2,7 @@ use std::iter;
 
 use itertools::Itertools;
 
-use crate::eval::{KeptRule, Op, Rolled, Value};
+use crate::eval::{KeptRule, Value};
 
 #[derive(Debug, Default)]
 struct RenderNode {
@@ -43,7 +43,7 @@ impl RenderNode {
                     }),
                 }
             }
-            Value::Op { op, values, .. } => {
+            Value::Op { values, .. } => {
                 let children = values
                     .iter()
                     .map(|v| match v {
