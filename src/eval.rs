@@ -260,7 +260,7 @@ impl Roll {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Rolled {
     pub dice: Box<Value>,
     pub sides: Box<Value>,
@@ -268,19 +268,19 @@ pub struct Rolled {
 }
 
 impl Rolled {
-    fn val(&self) -> i32 {
+    pub fn val(&self) -> i32 {
         self.kept.val()
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum KeptRule {
     All,
     Lowest(Value),
     Highest(Value),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Kept {
     pub keep: KeptRule,
     pub retained: Value,
@@ -298,7 +298,7 @@ impl Kept {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
     Unit,
     Const(i32),
@@ -327,6 +327,13 @@ impl Value {
                 }
                 Operation::Mul => values.iter().map(Value::value).product(),
             },
+        }
+    }
+
+    pub fn precedence(&self) -> u32 {
+        match self {
+            Value::Op { op, .. } => op.precedence(),
+            _ => 100,
         }
     }
 }

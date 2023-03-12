@@ -39,12 +39,11 @@ fn main() -> Result<(), String> {
 
     let parsed = parse(expression)?;
     let evaluated = parsed.evaluate(&mut ThreadRng::default());
-    let value = evaluated.value();
 
     if !quiet {
-        println!("{evaluated:?}");
+        render::no_color(&evaluated);
+    } else {
+        println!("{}", evaluated.value())
     }
-    render::no_color(&evaluated, 0, true);
-    println!("{value}");
     Ok(())
 }
