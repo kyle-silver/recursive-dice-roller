@@ -344,6 +344,13 @@ impl Value {
             self.to_string()
         }
     }
+
+    pub fn roll_fmt(&self) -> String {
+        match self {
+            Value::Op { .. } | Value::Rolled(_) => format!("({self})"),
+            _ => self.to_string(),
+        }
+    }
 }
 
 impl Display for Value {
@@ -351,17 +358,21 @@ impl Display for Value {
         match &self {
             Value::Unit => write!(f, ""),
             Value::Const(c) => write!(f, "{c}"),
-            Value::Rolled(Rolled { dice, sides, kept }) => match &kept.keep {
-                KeptRule::All => {
-                    write!(f, "{}d{}", dice.value(), sides.value())
+            Value::Rolled(Rolled { dice, sides, kept }) => {
+                let dice = dice.roll_fmt();
+                let sides = sides.roll_fmt();
+                match &kept.keep {
+                    KeptRule::All => {
+                        write!(f, "{dice}d{sides}")
+                    }
+                    KeptRule::Lowest(lowest) => {
+                        write!(f, "{dice}d{sides}kl{}", lowest.roll_fmt())
+                    }
+                    KeptRule::Highest(highest) => {
+                        write!(f, "{dice}d{sides}kl{}", highest.roll_fmt())
+                    }
                 }
-                KeptRule::Lowest(lowest) => {
-                    write!(f, "{}d{}kl{}", dice.value(), sides.value(), lowest.value())
-                }
-                KeptRule::Highest(highest) => {
-                    write!(f, "{}d{}k{}", dice.value(), sides.value(), highest.value())
-                }
-            },
+            }
             Value::Op { op, values } => {
                 let operator = match op {
                     Operation::Add => " + ",
