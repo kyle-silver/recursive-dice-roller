@@ -1,4 +1,4 @@
-use std::iter;
+use std::slice::Iter;
 
 use itertools::Itertools;
 
@@ -30,13 +30,13 @@ impl RenderNode {
                 match &rolled.kept.keep {
                     KeptRule::All => Some(RenderNode {
                         expression: format!("Rolling {value}"),
-                        output: format!("({output}) => {:?}", rolled.kept.highest),
+                        output: format!("{:?} => {output}", rolled.kept.highest),
                         children,
                     }),
                     _ => Some(RenderNode {
                         expression: format!("Rolling {value}"),
                         output: format!(
-                            "({value}) => ( {:?} | {:?} )",
+                            "({:?} | {:?}) => {output}",
                             rolled.kept.highest, rolled.kept.lowest
                         ),
                         children,
@@ -46,16 +46,18 @@ impl RenderNode {
             Value::Op { values, .. } => {
                 let children = values
                     .iter()
-                    .map(|v| match v {
-                        Value::Op { values, .. } => values.clone(),
-                        x => vec![x.clone()],
+                    .flat_map(|v| {
+                        let x: Box<dyn Iterator<Item = &Value>> = match v {
+                            Value::Op { values, .. } => Box::new(values.iter()),
+                            x => Box::new(std::iter::once(x)),
+                        };
+                        x
                     })
-                    .flat_map(|v| v.into_iter())
-                    .filter_map(|v| RenderNode::create(&v))
-                    .collect_vec();
+                    .filter_map(RenderNode::create)
+                    .collect();
                 Some(RenderNode {
                     expression: format!("Evaluating {value}"),
-                    output: format!("({})", value.value()),
+                    output: format!("{}", value.value()),
                     children,
                 })
             }
@@ -66,7 +68,32 @@ impl RenderNode {
 pub fn no_color(value: &Value) {
     let render: Option<RenderNode> = RenderNode::create(value);
     match render {
-        Some(render) => println!("{render:#?}"),
+        Some(render) => draw(&render, 0),
         None => println!("{}", value.value()),
+    }
+}
+
+fn draw(node: &RenderNode, depth: i32) {
+    let indent: String = "|   "
+        .chars()
+        .cycle()
+        .take((depth - 1).max(0) as usize * 4)
+        .collect();
+    if depth == 0 {
+        println!("{}", node.expression);
+    } else {
+        println!("{indent}+---{}", node.expression)
+    }
+    for child in &node.children {
+        draw(child, depth + 1);
+    }
+    if node.children.is_empty() {
+        println!("{indent}|   {}", node.output);
+        return;
+    }
+    if depth == 0 {
+        println!("{}", node.output);
+    } else {
+        println!("{indent}|   {}", node.output);
     }
 }
