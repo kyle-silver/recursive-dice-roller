@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::eval::{KeptRule, Operation, Value};
 
 #[derive(Debug, Default)]
@@ -82,44 +84,49 @@ impl RenderNode {
     }
 }
 
-pub fn no_color(value: &Value) {
+pub fn no_color(value: &Value) -> Result<(), std::io::Error> {
     let render: Option<RenderNode> = RenderNode::create(value, None, true);
+    let mut buf = Vec::new();
     match render {
-        Some(render) => draw(&render, 0),
-        None => println!("{}", value.value()),
+        Some(render) => draw(&mut buf, &render, 0)?,
+        None => writeln!(&mut buf, "{}", value.value())?,
     }
+    let output = String::from_utf8(buf).unwrap();
+    print!("{output}");
+    Ok(())
 }
 
-fn draw(node: &RenderNode, depth: i32) {
+fn draw(buf: &mut Vec<u8>, node: &RenderNode, depth: i32) -> Result<(), std::io::Error> {
     let indent: String = "|   "
         .chars()
         .cycle()
         .take((depth - 1).max(0) as usize * 4)
         .collect();
     if depth == 0 {
-        println!("{}", node.expression);
+        writeln!(buf, "{}", node.expression)?;
     } else {
-        println!("{indent}+-- {}", node.expression)
+        writeln!(buf, "{indent}+-- {}", node.expression)?;
     }
     for child in &node.children {
-        draw(child, depth + 1);
+        draw(buf, child, depth + 1)?;
     }
     if node.children.is_empty() {
         if depth == 0 {
             if let Some(output) = &node.output {
-                println!("{indent}{}", output);
+                writeln!(buf, "{indent}{}", output)?;
             }
         } else if let Some(output) = &node.output {
-            println!("{indent}|   {}", output);
+            writeln!(buf, "{indent}|   {}", output)?;
         }
 
-        return;
+        return Ok(());
     }
     if depth == 0 {
         if let Some(output) = &node.output {
-            println!("{}", output);
+            writeln!(buf, "{}", output)?;
         }
     } else if let Some(output) = &node.output {
-        println!("{indent}|   {}", output);
+        writeln!(buf, "{indent}|   {}", output)?;
     }
+    Ok(())
 }
