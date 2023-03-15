@@ -40,10 +40,11 @@ fn main() -> Result<(), String> {
     let parsed = parse(expression)?;
     let evaluated = parsed.evaluate(&mut ThreadRng::default());
 
-    if !quiet {
-        render::no_color(&evaluated);
-    } else {
-        println!("{}", evaluated.value())
+    if quiet {
+        println!("{}", evaluated.value());
+        return Ok(());
     }
+    let output = render::no_color(&evaluated).map_err(|_| "uh-oh".to_string())?;
+    render::colorful(&output).map_err(|_| "uh-oh".to_string())?;
     Ok(())
 }

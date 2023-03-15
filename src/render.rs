@@ -1,4 +1,9 @@
-use std::io::Write;
+use crossterm::{
+    cursor,
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
+    QueueableCommand,
+};
+use std::io::{stdout, Write};
 
 use crate::eval::{KeptRule, Operation, Value};
 
@@ -84,7 +89,7 @@ impl RenderNode {
     }
 }
 
-pub fn no_color(value: &Value) -> Result<(), std::io::Error> {
+pub fn no_color(value: &Value) -> Result<String, std::io::Error> {
     let render: Option<RenderNode> = RenderNode::create(value, None, true);
     let mut buf = Vec::new();
     match render {
@@ -92,7 +97,65 @@ pub fn no_color(value: &Value) -> Result<(), std::io::Error> {
         None => writeln!(&mut buf, "{}", value.value())?,
     }
     let output = String::from_utf8(buf).unwrap();
-    print!("{output}");
+    Ok(output)
+}
+
+pub fn colorful(input: &str) -> Result<(), std::io::Error> {
+    let mut stdout = stdout();
+    // stdout.queue(SetBackgroundColor(Color::Grey))?;
+    // stdout.queue(SetForegroundColor(Color::Green))?;
+    // stdout.queue(Print(input.to_string()))?;
+    let mut color = Color::White;
+    stdout.queue(SetForegroundColor(color))?;
+    for c in input.chars() {
+        match c {
+            '0'..='9' => {
+                if color != Color::Magenta {
+                    color = Color::Magenta;
+                    stdout.queue(SetForegroundColor(color))?;
+                }
+            }
+            '+' | '-' | '\u{00D7}' | '=' | '>' => {
+                if color != Color::Yellow {
+                    color = Color::Yellow;
+                    stdout.queue(SetForegroundColor(color))?;
+                }
+            }
+            'd' => {
+                if color != Color::Grey {
+                    color = Color::Grey;
+                    stdout.queue(SetForegroundColor(color))?;
+                }
+            }
+            '|' | '*' | '—' => {
+                if color != Color::Cyan {
+                    color = Color::Cyan;
+                    stdout.queue(SetForegroundColor(color))?;
+                }
+            }
+            _ => {
+                if color != Color::White {
+                    color = Color::White;
+                    stdout.queue(SetForegroundColor(color))?;
+                }
+            }
+        }
+        match c {
+            '|' => {
+                stdout.queue(Print("\u{2502}"))?;
+            }
+            '*' => {
+                stdout.queue(Print("\u{251C}"))?;
+            }
+            '—' => {
+                stdout.queue(Print("\u{2500}"))?;
+            }
+            _ => {
+                stdout.queue(Print(String::from(c)))?;
+            }
+        }
+    }
+    stdout.flush()?;
     Ok(())
 }
 
@@ -105,7 +168,7 @@ fn draw(buf: &mut Vec<u8>, node: &RenderNode, depth: i32) -> Result<(), std::io:
     if depth == 0 {
         writeln!(buf, "{}", node.expression)?;
     } else {
-        writeln!(buf, "{indent}+-- {}", node.expression)?;
+        writeln!(buf, "{indent}*—— {}", node.expression)?;
     }
     for child in &node.children {
         draw(buf, child, depth + 1)?;
