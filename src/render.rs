@@ -10,7 +10,6 @@ struct RenderNode {
 impl RenderNode {
     fn create(value: &Value, parent_op: Option<&Operation>, first: bool) -> Option<Self> {
         match value {
-            Value::Unit => None,
             Value::Const(c) => match parent_op {
                 Some(op) => {
                     let operator = match op {
@@ -110,20 +109,17 @@ fn draw(node: &RenderNode, depth: i32) {
             if let Some(output) = &node.output {
                 println!("{indent}{}", output);
             }
-        } else {
-            if let Some(output) = &node.output {
-                println!("{indent}|   {}", output);
-            }
+        } else if let Some(output) = &node.output {
+            println!("{indent}|   {}", output);
         }
+
         return;
     }
     if depth == 0 {
         if let Some(output) = &node.output {
             println!("{}", output);
         }
-    } else {
-        if let Some(output) = &node.output {
-            println!("{indent}|   {}", output);
-        }
+    } else if let Some(output) = &node.output {
+        println!("{indent}|   {}", output);
     }
 }

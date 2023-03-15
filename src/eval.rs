@@ -77,7 +77,6 @@ impl Op {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Exp {
-    Unit,
     Const(i32),
     Roll(Rc<RefCell<Roll>>),
     Op(Op),
@@ -111,7 +110,6 @@ impl Exp {
 
     pub fn evaluate(&self, rng: &mut impl Rng) -> Value {
         match self {
-            Exp::Unit => Value::Unit,
             Exp::Const(value) => Value::Const(*value),
             Exp::Roll(roll) => Value::Rolled(roll.borrow().val(rng)),
             Exp::Op(op) => op.value(rng),
@@ -121,7 +119,7 @@ impl Exp {
 
 impl Default for Exp {
     fn default() -> Self {
-        Exp::Unit
+        Exp::Const(0)
     }
 }
 
@@ -300,7 +298,6 @@ impl Kept {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
-    Unit,
     Const(i32),
     Rolled(Rolled),
     Op { op: Operation, values: Vec<Value> },
@@ -309,7 +306,6 @@ pub enum Value {
 impl Value {
     pub fn value(&self) -> i32 {
         match self {
-            Value::Unit => 0,
             Value::Const(val) => *val,
             Value::Rolled(rolled) => rolled.val(),
             Value::Op { op, values } => match op {
@@ -356,7 +352,6 @@ impl Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Value::Unit => write!(f, ""),
             Value::Const(c) => write!(f, "{c}"),
             Value::Rolled(Rolled { dice, sides, kept }) => {
                 let dice = dice.roll_fmt();
@@ -501,11 +496,5 @@ mod tests {
     fn one_plus_one() {
         let exp = Exp::add(vec_deque![Exp::Const(1), Exp::Const(1)]);
         assert_eq!(2, exp.evaluate(&mut mock_rng![]).value())
-    }
-
-    #[test]
-    fn unit() {
-        let exp = Exp::Unit;
-        assert_eq!(Value::Unit, exp.evaluate(&mut mock_rng![]));
     }
 }
