@@ -1,9 +1,9 @@
 use crossterm::{
-    cursor,
-    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
+    style::{Attribute, Color, Print, SetAttribute, SetForegroundColor},
     QueueableCommand,
 };
-use std::io::{stdout, Write};
+use itertools::Itertools;
+use std::io::{stdout, Stdout, Write};
 
 use crate::eval::{KeptRule, Operation, Value};
 
@@ -13,6 +13,10 @@ struct RenderNode {
     output: Option<String>,
     children: Vec<RenderNode>,
 }
+
+const VERTICAL_PIPE: char = '\u{2502}';
+const HORIZONTAL_PIPE: char = '\u{2500}';
+const RIGHT_FORK: char = '\u{251C}';
 
 impl RenderNode {
     fn create(value: &Value, parent_op: Option<&Operation>, first: bool) -> Option<Self> {
@@ -54,14 +58,18 @@ impl RenderNode {
                         output: Some(format!("{:?} => {output}", rolled.kept.highest)),
                         children,
                     }),
-                    _ => Some(RenderNode {
-                        expression: format!("Rolling {value}"),
-                        output: Some(format!(
-                            "({:?} | {:?}) => {output}",
-                            rolled.kept.highest, rolled.kept.lowest
-                        )),
-                        children,
-                    }),
+                    _ => {
+                        let highest = rolled.kept.highest.iter().join(", ");
+                        let lowest = rolled.kept.lowest.iter().join(", ");
+                        Some(RenderNode {
+                            expression: format!("Rolling {value}"),
+                            output: Some(format!(
+                                "[{highest} | {lowest}] => {output}",
+                                // rolled.kept.highest, rolled.kept.lowest
+                            )),
+                            children,
+                        })
+                    }
                 }
             }
             Value::Op { op, values, .. } => {
@@ -100,67 +108,90 @@ pub fn no_color(value: &Value) -> Result<String, std::io::Error> {
     Ok(output)
 }
 
+struct Style {
+    color: Color,
+    attribute: Attribute,
+}
+
+impl Style {
+    fn set_color(&mut self, stdout: &mut Stdout, color: Color) -> Result<(), std::io::Error> {
+        if self.color != color {
+            stdout.queue(SetForegroundColor(color))?;
+            self.color = color;
+        }
+        Ok(())
+    }
+
+    fn set_attribute(
+        &mut self,
+        stdout: &mut Stdout,
+        attribute: Attribute,
+    ) -> Result<(), std::io::Error> {
+        if self.attribute != attribute {
+            stdout.queue(SetAttribute(attribute))?;
+            self.attribute = attribute;
+        }
+        Ok(())
+    }
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            color: Color::Reset,
+            attribute: Attribute::Reset,
+        }
+    }
+}
+
 pub fn colorful(input: &str) -> Result<(), std::io::Error> {
     let mut stdout = stdout();
-    // stdout.queue(SetBackgroundColor(Color::Grey))?;
-    // stdout.queue(SetForegroundColor(Color::Green))?;
-    // stdout.queue(Print(input.to_string()))?;
-    let mut color = Color::White;
-    stdout.queue(SetForegroundColor(color))?;
-    for c in input.chars() {
+    stdout.queue(SetAttribute(Attribute::Bold))?;
+    let mut style = Style::default();
+    let mut chars = input.chars().peekable();
+    while let Some(c) = chars.next() {
         match c {
             '0'..='9' => {
-                if color != Color::Magenta {
-                    color = Color::Magenta;
-                    stdout.queue(SetForegroundColor(color))?;
-                }
+                style.set_color(&mut stdout, Color::Magenta)?;
+                style.set_attribute(&mut stdout, Attribute::Reset)?;
             }
             '+' | '-' | '\u{00D7}' | '=' | '>' => {
-                if color != Color::Yellow {
-                    color = Color::Yellow;
-                    stdout.queue(SetForegroundColor(color))?;
+                style.set_color(&mut stdout, Color::DarkYellow)?;
+                style.set_attribute(&mut stdout, Attribute::Reset)?;
+            }
+            'k' => {
+                if let Some('0'..='9' | 'l') = chars.peek() {
+                    style.set_color(&mut stdout, Color::Magenta)?;
+                    style.set_attribute(&mut stdout, Attribute::Reset)?;
                 }
             }
-            'd' => {
-                if color != Color::Grey {
-                    color = Color::Grey;
-                    stdout.queue(SetForegroundColor(color))?;
+            'd' | 'l' => {
+                if let Some('0'..='9') = chars.peek() {
+                    style.set_color(&mut stdout, Color::Magenta)?;
+                    style.set_attribute(&mut stdout, Attribute::Reset)?;
                 }
             }
-            '|' | '*' | '—' => {
-                if color != Color::Cyan {
-                    color = Color::Cyan;
-                    stdout.queue(SetForegroundColor(color))?;
-                }
+            'a'..='z' | 'A'..='Z' => {
+                style.set_color(&mut stdout, Color::Green)?;
+                style.set_attribute(&mut stdout, Attribute::Bold)?;
+            }
+            VERTICAL_PIPE | HORIZONTAL_PIPE | RIGHT_FORK => {
+                style.set_color(&mut stdout, Color::Reset)?;
+                style.set_attribute(&mut stdout, Attribute::Reset)?;
             }
             _ => {
-                if color != Color::White {
-                    color = Color::White;
-                    stdout.queue(SetForegroundColor(color))?;
-                }
+                style.set_color(&mut stdout, Color::Reset)?;
+                style.set_attribute(&mut stdout, Attribute::Reset)?;
             }
         }
-        match c {
-            '|' => {
-                stdout.queue(Print("\u{2502}"))?;
-            }
-            '*' => {
-                stdout.queue(Print("\u{251C}"))?;
-            }
-            '—' => {
-                stdout.queue(Print("\u{2500}"))?;
-            }
-            _ => {
-                stdout.queue(Print(String::from(c)))?;
-            }
-        }
+        stdout.queue(Print(c))?;
     }
     stdout.flush()?;
     Ok(())
 }
 
 fn draw(buf: &mut Vec<u8>, node: &RenderNode, depth: i32) -> Result<(), std::io::Error> {
-    let indent: String = "|   "
+    let indent: String = format!("{VERTICAL_PIPE}   ")
         .chars()
         .cycle()
         .take((depth - 1).max(0) as usize * 4)
@@ -168,7 +199,11 @@ fn draw(buf: &mut Vec<u8>, node: &RenderNode, depth: i32) -> Result<(), std::io:
     if depth == 0 {
         writeln!(buf, "{}", node.expression)?;
     } else {
-        writeln!(buf, "{indent}*—— {}", node.expression)?;
+        writeln!(
+            buf,
+            "{indent}{RIGHT_FORK}{HORIZONTAL_PIPE}{HORIZONTAL_PIPE} {}",
+            node.expression
+        )?;
     }
     for child in &node.children {
         draw(buf, child, depth + 1)?;
@@ -176,20 +211,25 @@ fn draw(buf: &mut Vec<u8>, node: &RenderNode, depth: i32) -> Result<(), std::io:
     if node.children.is_empty() {
         if depth == 0 {
             if let Some(output) = &node.output {
-                writeln!(buf, "{indent}{}", output)?;
+                writeln!(buf, "{indent}{output}")?;
             }
-        } else if let Some(output) = &node.output {
-            writeln!(buf, "{indent}|   {}", output)?;
+            writeln!(buf, "{indent}")?;
+        } else {
+            if let Some(output) = &node.output {
+                writeln!(buf, "{indent}{VERTICAL_PIPE}   {output}")?;
+            }
+            writeln!(buf, "{indent}{VERTICAL_PIPE}")?;
         }
 
         return Ok(());
     }
     if depth == 0 {
         if let Some(output) = &node.output {
-            writeln!(buf, "{}", output)?;
+            writeln!(buf, "{output}")?;
         }
     } else if let Some(output) = &node.output {
-        writeln!(buf, "{indent}|   {}", output)?;
+        writeln!(buf, "{indent}{VERTICAL_PIPE}   {}", output)?;
+        writeln!(buf, "{indent}{VERTICAL_PIPE}")?;
     }
     Ok(())
 }
