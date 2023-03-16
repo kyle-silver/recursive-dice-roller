@@ -6,6 +6,7 @@
         "Itertools",
         "mockrng",
         "Peekable",
+        "Queueable",
         "rngs",
         "rustfmt",
         "subexpression",

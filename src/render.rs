@@ -63,10 +63,7 @@ impl RenderNode {
                         let lowest = rolled.kept.lowest.iter().join(", ");
                         Some(RenderNode {
                             expression: format!("Rolling {value}"),
-                            output: Some(format!(
-                                "[{highest} | {lowest}] => {output}",
-                                // rolled.kept.highest, rolled.kept.lowest
-                            )),
+                            output: Some(format!("[{highest} | {lowest}] => {output}",)),
                             children,
                         })
                     }
@@ -75,17 +72,8 @@ impl RenderNode {
             Value::Op { op, values, .. } => {
                 let children = values
                     .iter()
-                    .flat_map(|v| {
-                        let x: Box<dyn Iterator<Item = (&Value, Operation)>> = match v {
-                            Value::Op {
-                                op: sub_op, values, ..
-                            } => Box::new(values.iter().map(|v| (v, sub_op.clone()))),
-                            x => Box::new(std::iter::once((x, op.clone()))),
-                        };
-                        x
-                    })
                     .enumerate()
-                    .filter_map(|(i, (v, operator))| RenderNode::create(v, Some(&operator), i == 0))
+                    .filter_map(|(i, v)| RenderNode::create(v, Some(op), i == 0))
                     .collect();
                 Some(RenderNode {
                     expression: format!("Evaluating {value}"),
