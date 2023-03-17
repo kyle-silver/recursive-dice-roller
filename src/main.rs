@@ -1,5 +1,6 @@
 #![allow(clippy::needless_return, clippy::neg_multiply)]
 
+mod console;
 mod eval;
 mod parse;
 mod render;
@@ -45,6 +46,6 @@ fn main() -> Result<(), String> {
         return Ok(());
     }
     let output = render::no_color(&evaluated).map_err(|_| "uh-oh".to_string())?;
-    render::colorful(&output).map_err(|_| "uh-oh".to_string())?;
+    console::colorful(&output).map_err(|_| "uh-oh".to_string())?;
     Ok(())
 }
