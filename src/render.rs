@@ -1,4 +1,6 @@
 use itertools::Itertools;
+use rand::rngs::ThreadRng;
+use rand::seq::SliceRandom;
 use std::io::Write;
 
 use crate::eval::{KeptRule, Operation, Value};
@@ -49,14 +51,23 @@ impl RenderNode {
                     .collect();
                 let output = rolled.val();
                 match &rolled.kept.keep {
-                    KeptRule::All => Some(RenderNode {
-                        expression: format!("Rolling {value}"),
-                        output: Some(format!("{:?} => {output}", rolled.kept.highest)),
-                        children,
-                    }),
+                    KeptRule::All => {
+                        let mut shuffled = rolled.kept.highest.clone();
+                        shuffled.shuffle(&mut ThreadRng::default());
+                        Some(RenderNode {
+                            expression: format!("Rolling {value}"),
+                            output: Some(format!("{:?} => {output}", shuffled)),
+                            children,
+                        })
+                    }
                     _ => {
-                        let highest = rolled.kept.highest.iter().join(", ");
-                        let lowest = rolled.kept.lowest.iter().join(", ");
+                        let mut highest = rolled.kept.highest.iter().collect_vec();
+                        let mut lowest = rolled.kept.lowest.iter().collect_vec();
+                        let mut rng = ThreadRng::default();
+                        highest.shuffle(&mut rng);
+                        lowest.shuffle(&mut rng);
+                        let highest = highest.iter().join(", ");
+                        let lowest = lowest.iter().join(", ");
                         Some(RenderNode {
                             expression: format!("Rolling {value}"),
                             output: Some(format!("[{highest} | {lowest}] => {output}",)),

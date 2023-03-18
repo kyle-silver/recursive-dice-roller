@@ -1,7 +1,6 @@
 use std::{cell::RefCell, collections::VecDeque, fmt::Display, rc::Rc};
 
 use itertools::Itertools;
-use rand::Rng;
 
 macro_rules! vec_deque {
     [] => {
@@ -18,6 +17,7 @@ macro_rules! vec_deque {
     };
 }
 
+use rand::Rng;
 pub(crate) use vec_deque;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -138,12 +138,14 @@ impl Keep {
             Keep::Lowest(exp) => exp.evaluate(rng),
             Keep::Highest(exp) => exp.evaluate(rng),
             Keep::All => {
+                // scramble the results if we keep all
+
                 return Kept {
                     keep: KeptRule::All,
                     retained: Value::Const(elements.len() as i32),
                     lowest: Vec::new(),
                     highest: elements.to_vec(),
-                }
+                };
             }
         };
 
