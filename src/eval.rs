@@ -363,10 +363,11 @@ impl Display for Value {
                         write!(f, "{dice}d{sides}")
                     }
                     KeptRule::Lowest(lowest) => {
-                        write!(f, "{dice}d{sides}kl{}", lowest.roll_fmt())
+                        // write!(f, "{dice}d{sides}kl{}", lowest.roll_fmt())
+                        write!(f, "{dice}d{sides}kl{}", kept.retained.roll_fmt())
                     }
                     KeptRule::Highest(highest) => {
-                        write!(f, "{dice}d{sides}k{}", highest.roll_fmt())
+                        write!(f, "{dice}d{sides}k{}", kept.retained.roll_fmt())
                     }
                 }
             }
