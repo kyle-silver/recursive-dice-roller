@@ -63,49 +63,40 @@ impl Iterator for Tokenizer<'_> {
 
 impl Tokenizer<'_> {
     pub fn next_token(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<Token, String> {
-        while let Some(c) = chars.peek() {
+        while let Some(c) = chars.next() {
             if c.is_whitespace() {
-                chars.next();
                 continue;
             }
             match c {
                 '(' => {
-                    chars.next();
                     return Ok(Token::OpenParen);
                 }
                 ')' => {
-                    chars.next();
                     return Ok(Token::CloseParen);
                 }
-                '0'..='9' => {
-                    let number = Self::parse_number(chars)?;
+                digit @ '0'..='9' => {
+                    let number = Self::parse_number(digit, chars)?;
                     return Ok(Token::Number(number));
                 }
                 '-' => {
-                    // consume the minus sign
-                    chars.next();
-                    // parse the rest of the number
+                    // parse the actual number
                     if chars.peek().map(char::is_ascii_digit).unwrap_or(false) {
-                        let number = Self::parse_number(chars)?;
+                        let first = chars.next().unwrap();
+                        let number = Self::parse_number(first, chars)?;
                         return Ok(Token::Number(-1 * number));
                     }
                     return Ok(Token::Operation(Operation::Sub));
                 }
                 '+' => {
-                    chars.next();
                     return Ok(Token::Operation(Operation::Add));
                 }
                 '*' => {
-                    chars.next();
                     return Ok(Token::Operation(Operation::Mul));
                 }
                 'd' => {
-                    chars.next();
                     return Ok(Token::Die);
                 }
                 'k' => {
-                    // consume the 'k'
-                    chars.next();
                     // figure out which expression is next; we can even allow
                     // whitespace to follow in case somebody really wants to
                     // notate it as "2 d 20 k 1", hideous though that may be
@@ -136,12 +127,15 @@ impl Tokenizer<'_> {
         Err("Character stream completed before token was fully assembled".into())
     }
 
-    fn parse_number(chars: &mut Peekable<impl Iterator<Item = char>>) -> Result<i32, String> {
+    fn parse_number(
+        first: char,
+        remaining: &mut Peekable<impl Iterator<Item = char>>,
+    ) -> Result<i32, String> {
         // corral digits
-        let mut digit_buffer = vec![];
-        while let Some(c) = chars.peek() {
+        let mut digit_buffer = vec![first];
+        while let Some(c) = remaining.peek() {
             if c.is_ascii_digit() {
-                let next = chars.next().ok_or("value was present during peek")?;
+                let next = remaining.next().ok_or("value was present during peek")?;
                 digit_buffer.push(next);
             } else {
                 break;
